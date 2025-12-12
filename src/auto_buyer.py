@@ -366,64 +366,46 @@ class AutoBuyer:
         click_delay = self.config.get("click_delay", 0.1)
         max_attempts = self.config.get("max_buy_attempts", 50)
 
-        for _ in range(max_attempts):
+        # First, find and click the item to open accordion
+        screen = self.screen.capture_screen(region)
+        pos = self.screen.get_text_center_easyocr(screen, target)
+        if not pos:
+            self._log(f"Could not find {target}")
+            return
+
+        rel_x, rel_y = pos
+        if region:
+            abs_x = rel_x + region[0]
+            abs_y = rel_y + region[1]
+        else:
+            abs_x, abs_y = rel_x, rel_y
+
+        self._log(f"Clicking {target}: ({rel_x},{rel_y}) -> ({abs_x},{abs_y})")
+        pyautogui.click(abs_x, abs_y)
+        self.items_detected += 1
+        self.last_detection_time = time.time()
+        time.sleep(0.5)  # Wait for accordion to open
+
+        if self.on_detection:
+            self.on_detection(target, (abs_x, abs_y))
+
+        # Now keep clicking the buy button until it disappears (sold out)
+        for attempt in range(max_attempts):
             if not self.running or self.paused:
                 return
 
             screen = self.screen.capture_screen(region)
 
-            # Check if NO STOCK is visible (must be exact "NO STOCK", not "X17 STOCK")
-            if self.screen.find_text_easyocr(screen, "NO STOCK"):
-                self._log(f"{target}: NO STOCK")
-                return
-
-            # Find item using easyocr
-            pos = self.screen.get_text_center_easyocr(screen, target)
-            if not pos:
-                return  # Item not found
-
-            rel_x, rel_y = pos
-            if region:
-                abs_x = rel_x + region[0]
-                abs_y = rel_y + region[1]
-            else:
-                abs_x, abs_y = rel_x, rel_y
-
-            self._log(f"Clicking {target}: ({rel_x},{rel_y}) -> ({abs_x},{abs_y})")
-
-            # Click item to expand accordion
-            pyautogui.click(abs_x, abs_y)
-            self.items_detected += 1
-            self.last_detection_time = time.time()
-            time.sleep(0.8)
-
-            if self.on_detection:
-                self.on_detection(target, (abs_x, abs_y))
-
-            # Look for buy button near where we clicked
-            # Wait a bit longer for accordion to fully open
-            time.sleep(0.5)
-
-            screen = self.screen.capture_screen(region)
-
-            # Check for NO STOCK after clicking
-            if self.screen.find_text_easyocr(screen, "NO STOCK"):
-                self._log(f"{target}: NO STOCK")
-                return
-
-            # Find green buy buttons by color detection
-            green_buttons = self.screen.find_green_buttons(screen, debug=True)
-            self._log(f"[DEBUG] Found {len(green_buttons)} green buttons, clicked item at ({rel_x},{rel_y})")
+            # Find green buy buttons by color detection (fast!)
+            green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
             if green_buttons:
-                # Filter: button should be BELOW and within 200px horizontally of where we clicked
+                # Filter: button should be BELOW the item and within 200px horizontally
                 valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y and y < rel_y + 150  # Below but not too far
-                                and abs(x - rel_x) < 200]  # Within 200px horizontally
-                self._log(f"[DEBUG] Valid green buttons near click: {valid_buttons}")
+                                if y > rel_y and y < rel_y + 150
+                                and abs(x - rel_x) < 200]
 
                 if valid_buttons:
-                    # Pick the closest one to where we clicked
                     best_button = min(valid_buttons, key=lambda b: abs(b[1] - rel_y))
                     buy_rel_x, buy_rel_y = best_button
 
@@ -433,21 +415,25 @@ class AutoBuyer:
                     else:
                         buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
 
-                    self._log(f"Clicking green buy button at ({buy_abs_x},{buy_abs_y})")
+                    self._log(f"Clicking buy button at ({buy_abs_x},{buy_abs_y})")
                     pyautogui.click(buy_abs_x, buy_abs_y)
                     self.items_purchased += 1
-                    self._log(f"Purchased {target}!")
+                    self._log(f"Purchased {target}! (attempt {attempt + 1})")
 
                     if self.on_purchase:
                         self.on_purchase(target)
 
-                    time.sleep(click_delay)
+                    time.sleep(click_delay + 0.1)  # Small delay between purchases
                 else:
-                    self._log(f"Green buttons found but none near item, skipping")
+                    # No valid green button near the item - might be sold out
+                    self._log(f"{target}: No buy button found (sold out or closed)")
                     return
             else:
-                self._log(f"No green buttons found for {target}")
+                # No green buttons at all - sold out
+                self._log(f"{target}: No green buttons - sold out")
                 return
+
+        self._log(f"{target}: Reached max attempts ({max_attempts})")
 
     def _buy_until_no_stock_template(self, template_name: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (template matching version)."""
