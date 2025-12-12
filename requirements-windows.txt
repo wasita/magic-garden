@@ -1,0 +1,35 @@
+# Windows-specific requirements for Magic Garden Auto-Buyer
+#
+# PREREQUISITE: Install Tesseract OCR before running the bot
+#
+# 1. Download Tesseract installer from:
+#    https://github.com/UB-Mannheim/tesseract/wiki
+#    (Get the latest 64-bit installer, e.g., tesseract-ocr-w64-setup-5.3.3.exe)
+#
+# 2. During installation:
+#    - Install to default path: C:\Program Files\Tesseract-OCR
+#    - CHECK "Add to PATH" option
+#
+# 3. Verify installation by opening Command Prompt and running:
+#    tesseract --version
+#
+# 4. If not in PATH, add this line to your Python script or set environment variable:
+#    import pytesseract
+#    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+#
+# INSTALLATION:
+#
+# Option A: Using uv (recommended)
+#   uv sync
+#
+# Option B: Using pip
+#   pip install -r requirements-windows.txt
+#
+
+pyautogui>=0.9.54
+opencv-python>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+pynput>=1.7.6
+pytesseract>=0.3.10
+easyocr>=1.7.0
