@@ -325,7 +325,7 @@ class AutoBuyer:
             screen = self.screen.capture_screen(region)
 
             # Find items with STOCK on the same line (single OCR pass - fast!)
-            shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=(page == 0))
+            shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
 
             if shop_items:
                 self._log(f"Found {len(shop_items)} items on page {page + 1}")
@@ -471,24 +471,26 @@ class AutoBuyer:
             green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
             if green_buttons:
-                # Filter: button should be BELOW the item (within reasonable Y range)
+                # Filter: button should be BELOW the item and roughly same X (directly below)
                 # Scale thresholds based on region size (Mac baseline: 534 height)
                 scale = region[3] / 534 if region else 1.0
                 min_y_dist = int(30 * scale)   # Skip elements on same row (like cactus icon)
                 max_y_dist = int(200 * scale)  # How far below item to look
+                max_x_dist = int(100 * scale)  # Button should be roughly below item, not far left/right
 
-                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y + min_y_dist}..{rel_y + max_y_dist}]")
+                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y + min_y_dist}..{rel_y + max_y_dist}], x:[{rel_x - max_x_dist}..{rel_x + max_x_dist}]")
                 self._log(f"All green buttons found: {green_buttons}")
 
-                # Filter: only buttons below the item (not on same row, within max distance)
+                # Filter: buttons below item AND roughly same horizontal position
                 valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y + min_y_dist and y < rel_y + max_y_dist]
+                                if y > rel_y + min_y_dist and y < rel_y + max_y_dist
+                                and abs(x - rel_x) < max_x_dist]
 
                 self._log(f"Valid buttons after Y filter: {valid_buttons} (scale={scale:.2f})")
 
                 if valid_buttons:
-                    # Pick the button closest below (smallest Y distance only)
-                    best_button = min(valid_buttons, key=lambda b: b[1])  # Smallest Y = highest on screen = closest below item
+                    # Pick the button furthest below in dropdown (largest Y = bottom of dropdown where buy button is)
+                    best_button = max(valid_buttons, key=lambda b: b[1])
                     buy_rel_x, buy_rel_y = best_button
                     self._log(f"Selected button at ({buy_rel_x},{buy_rel_y}) - y_dist={buy_rel_y - rel_y}, x_dist={abs(buy_rel_x - rel_x)}")
 
