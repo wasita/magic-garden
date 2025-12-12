@@ -125,7 +125,12 @@ class AutoBuyer:
             self._log(f"Clicked center ({center_x}, {center_y}) to focus game")
             time.sleep(0.5)
 
-        # Step 1: Press space to open Seed Shop panel directly
+        # Step 1: Teleport to shop using Shift+1
+        pyautogui.hotkey('shift', '1')
+        self._log("Pressed Shift+1 to teleport to shop")
+        time.sleep(1.0)  # Wait for teleport
+
+        # Step 2: Press space to open Seed Shop panel
         max_shop_attempts = 5
         shop_wait = 1.5  # Wait for shop to open
 
@@ -141,7 +146,7 @@ class AutoBuyer:
                 self._log("Seed Shop is open - found buy button")
                 break  # Shop is open
 
-            # Press space to interact/open seed shop
+            # Press space to open seed shop
             pyautogui.press('space')
             self._log(f"Pressed space to open Seed Shop (attempt {attempt + 1})")
             time.sleep(shop_wait)
@@ -149,7 +154,7 @@ class AutoBuyer:
             self._log("Could not open Seed Shop after multiple attempts")
             return
 
-        # Step 2: Buy seeds from the open shop
+        # Step 3: Buy seeds from the open shop
         self._buy_all_items_in_shop(region, shop_type="seed")
 
         # Step 3: Press up arrow until "Open Egg Shop" is visible (template matching)
