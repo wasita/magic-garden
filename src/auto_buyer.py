@@ -439,10 +439,17 @@ class AutoBuyer:
             green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
             if green_buttons:
-                # Filter: button should be BELOW the item and within 200px horizontally
+                # Filter: button should be BELOW the item and within range horizontally
+                # Scale thresholds based on region size (Mac baseline: 534 height)
+                scale = region[3] / 534 if region else 1.0
+                max_y_dist = int(150 * scale)  # How far below item to look
+                max_x_dist = int(200 * scale)  # Horizontal tolerance
+
                 valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y and y < rel_y + 150
-                                and abs(x - rel_x) < 200]
+                                if y > rel_y and y < rel_y + max_y_dist
+                                and abs(x - rel_x) < max_x_dist]
+
+                self._log(f"Found {len(green_buttons)} green buttons, {len(valid_buttons)} valid (scale={scale:.2f}, max_y={max_y_dist}, max_x={max_x_dist})")
 
                 if valid_buttons:
                     best_button = min(valid_buttons, key=lambda b: abs(b[1] - rel_y))
