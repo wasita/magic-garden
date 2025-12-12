@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pyautogui
+import pytesseract
 from pathlib import Path
 from typing import Optional, Tuple, List
 from PIL import Image
@@ -111,3 +112,100 @@ class ScreenCapture:
         screenshot = pyautogui.screenshot(region=region)
         screenshot.save(path)
         print(f"Screenshot saved to: {path}")
+
+    def find_text(self, screen: np.ndarray, search_text: str) -> Optional[Tuple[int, int, int, int]]:
+        """Find text on screen using OCR.
+
+        Args:
+            screen: Screenshot as numpy array in BGR format
+            search_text: Text to search for (case-insensitive)
+
+        Returns:
+            Tuple of (x, y, width, height) for the text bounding box, or None if not found
+        """
+        # Convert to grayscale for better OCR
+        gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+
+        # Apply threshold to improve text detection
+        _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+
+        # Get OCR data with bounding boxes
+        data = pytesseract.image_to_data(thresh, output_type=pytesseract.Output.DICT)
+
+        search_lower = search_text.lower()
+        n_boxes = len(data['text'])
+
+        for i in range(n_boxes):
+            text = data['text'][i].strip().lower()
+            if search_lower in text:
+                x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                return (x, y, w, h)
+
+        # Also try matching consecutive words (e.g., "Mythical Egg" might be two words)
+        for i in range(n_boxes - 1):
+            combined = f"{data['text'][i]} {data['text'][i+1]}".strip().lower()
+            if search_lower in combined:
+                x = data['left'][i]
+                y = min(data['top'][i], data['top'][i+1])
+                w = (data['left'][i+1] + data['width'][i+1]) - x
+                h = max(data['height'][i], data['height'][i+1])
+                return (x, y, w, h)
+
+        return None
+
+    def find_all_text(self, screen: np.ndarray, search_text: str) -> List[Tuple[int, int, int, int]]:
+        """Find all occurrences of text on screen.
+
+        Returns:
+            List of (x, y, width, height) tuples for each match
+        """
+        gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+
+        data = pytesseract.image_to_data(thresh, output_type=pytesseract.Output.DICT)
+
+        search_lower = search_text.lower()
+        matches = []
+        n_boxes = len(data['text'])
+
+        for i in range(n_boxes):
+            text = data['text'][i].strip().lower()
+            if search_lower in text:
+                x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                matches.append((x, y, w, h))
+
+        # Check consecutive words
+        for i in range(n_boxes - 1):
+            combined = f"{data['text'][i]} {data['text'][i+1]}".strip().lower()
+            if search_lower in combined:
+                x = data['left'][i]
+                y = min(data['top'][i], data['top'][i+1])
+                w = (data['left'][i+1] + data['width'][i+1]) - x
+                h = max(data['height'][i], data['height'][i+1])
+                matches.append((x, y, w, h))
+
+        return matches
+
+    def text_exists(self, screen: np.ndarray, search_text: str) -> bool:
+        """Check if text exists on screen.
+
+        Args:
+            screen: Screenshot as numpy array
+            search_text: Text to search for (case-insensitive)
+
+        Returns:
+            True if text is found, False otherwise
+        """
+        return self.find_text(screen, search_text) is not None
+
+    def get_text_center(self, screen: np.ndarray, search_text: str) -> Optional[Tuple[int, int]]:
+        """Find text and return center coordinates.
+
+        Returns:
+            Tuple of (center_x, center_y) or None if not found
+        """
+        result = self.find_text(screen, search_text)
+        if result:
+            x, y, w, h = result
+            return (x + w // 2, y + h // 2)
+        return None
