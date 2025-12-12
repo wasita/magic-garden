@@ -61,7 +61,7 @@ class AutoBuyer:
         self.paused = False
 
         # Capture game window region from user click
-        self._log("Click on your game window within 3 seconds...")
+        self._log("Click on the TOP-LEFT corner of your game window within 3 seconds...")
         self.game_region = self._wait_for_click_region(timeout=3.0)
         if self.game_region:
             self._log(f"Game region set: {self.game_region}")
@@ -104,18 +104,17 @@ class AutoBuyer:
         listener.stop()
 
         if click_pos:
-            # Create region centered around click point
-            # Default window size (can be configured)
+            # Create region with click as top-left corner
             window_width = self.config.get("window_width", 500)
-            window_height = self.config.get("window_height", 900)
+            window_height = self.config.get("window_height", 700)
 
             # Convert to integers (pynput returns floats on macOS)
             click_x = int(click_pos[0])
-            x = click_x - window_width // 2
-            y = 0  # Start from top of screen
+            click_y = int(click_pos[1])
 
-            # Make sure x doesn't go negative
-            x = max(0, x)
+            # Make sure coords don't go negative
+            x = max(0, click_x)
+            y = max(0, click_y)
 
             return (x, y, window_width, window_height)
 
@@ -242,16 +241,18 @@ class AutoBuyer:
     def _buy_all_items_in_shop_with_scroll(self, region: Optional[Tuple[int, int, int, int]], shop_type: str):
         """Buy all available items in the shop, scrolling down to see all items."""
         click_delay = self.config.get("click_delay", 0.1)
-        ocr_targets = self.config.get("ocr_targets", [])
         max_scroll_pages = 20  # Maximum number of times to scroll down
 
-        # Filter targets based on shop type
+        # Get template names based on shop type
+        templates = self.config.get("templates", {})
         if shop_type == "seed":
-            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t]
+            # Filter for seed/pod templates
+            targets = [name for name in templates.keys()
+                      if "seed" in name or "pod" in name]
         else:  # egg
-            targets = [t for t in ocr_targets if "Egg" in t]
+            targets = [name for name in templates.keys() if "egg" in name]
 
-        self._log(f"Looking for {shop_type} items: {targets}")
+        self._log(f"Looking for {shop_type} items (templates): {targets}")
 
         # Scroll through the shop and buy items on each page
         for page in range(max_scroll_pages):
@@ -262,16 +263,24 @@ class AutoBuyer:
 
             # Try to buy each target on the current page
             found_any = False
-            for target in targets:
+            screen = self.screen.capture_screen(region)
+
+            for template_name in targets:
                 if not self.running or self.paused:
                     return
 
-                screen = self.screen.capture_screen(region)
-                pos = self.screen.get_text_center(screen, target)
-                if pos:
+                # Debug: show confidence scores for all pages
+                match = self.screen.find_template(screen, template_name, debug=True)
+                if match:
                     found_any = True
-                    self._log(f"Found {target} on page {page + 1}")
-                    self._buy_until_no_stock(target, region)
+                    rel_x, rel_y, conf = match
+                    self._log(f"Found {template_name} at ({rel_x},{rel_y}) conf={conf:.2f} on page {page + 1}")
+                    self._buy_until_no_stock_template(template_name, region)
+                    # Re-capture screen after buying in case layout changed
+                    screen = self.screen.capture_screen(region)
+
+            if not found_any:
+                self._log(f"No targets found on page {page + 1}")
 
             # Scroll down to see more items (use mouse scroll, not arrow keys)
             if region:
@@ -284,7 +293,7 @@ class AutoBuyer:
             time.sleep(0.3)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
-        """Keep buying a specific item until NO STOCK appears."""
+        """Keep buying a specific item until NO STOCK appears (OCR version)."""
         click_delay = self.config.get("click_delay", 0.1)
         max_attempts = self.config.get("max_buy_attempts", 50)  # Safety limit
 
@@ -355,6 +364,78 @@ class AutoBuyer:
                 time.sleep(click_delay)
             else:
                 self._log(f"Could not find buy button for {target}")
+                return
+
+    def _buy_until_no_stock_template(self, template_name: str, region: Optional[Tuple[int, int, int, int]]):
+        """Keep buying a specific item until NO STOCK appears (template matching version)."""
+        click_delay = self.config.get("click_delay", 0.1)
+        max_attempts = self.config.get("max_buy_attempts", 50)  # Safety limit
+
+        for _ in range(max_attempts):
+            if not self.running or self.paused:
+                return
+
+            screen = self.screen.capture_screen(region)
+
+            # Check if NO STOCK is visible (still use OCR for this text)
+            if self.screen.text_exists(screen, "NO STOCK"):
+                self._log(f"{template_name}: NO STOCK")
+                return
+
+            # Find item using template matching
+            match = self.screen.find_template(screen, template_name)
+            if not match:
+                return  # Item not found on this screen
+
+            rel_x, rel_y, conf = match
+            # Add region offset to convert from image coords to screen coords
+            if region:
+                abs_x = rel_x + region[0]
+                abs_y = rel_y + region[1]
+            else:
+                abs_x, abs_y = rel_x, rel_y
+
+            self._log(f"Clicking {template_name}: relative=({rel_x},{rel_y}) conf={conf:.2f} -> absolute=({abs_x},{abs_y})")
+
+            # Click item to expand accordion
+            pyautogui.click(abs_x, abs_y)
+            self.items_detected += 1
+            self.last_detection_time = time.time()
+
+            # Wait for accordion to pop up with buy button
+            time.sleep(0.8)
+
+            if self.on_detection:
+                self.on_detection(template_name, (abs_x, abs_y))
+
+            # Look for buy button (with coin icon) that appeared in accordion
+            screen = self.screen.capture_screen(region)
+
+            # Check again for NO STOCK after clicking item
+            if self.screen.text_exists(screen, "NO STOCK"):
+                self._log(f"{template_name}: NO STOCK")
+                return
+
+            # Try to find buy button via template
+            buy_match = self.screen.find_template(screen, "buy_button")
+            if buy_match:
+                buy_rel_x, buy_rel_y, buy_conf = buy_match
+                if region:
+                    buy_abs_x = buy_rel_x + region[0]
+                    buy_abs_y = buy_rel_y + region[1]
+                else:
+                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+                self._log(f"Found buy button: relative=({buy_rel_x},{buy_rel_y}) conf={buy_conf:.2f} -> absolute=({buy_abs_x},{buy_abs_y})")
+                pyautogui.click(buy_abs_x, buy_abs_y)
+                self.items_purchased += 1
+                self._log(f"Purchased {template_name}!")
+
+                if self.on_purchase:
+                    self.on_purchase(template_name)
+
+                time.sleep(click_delay)
+            else:
+                self._log(f"Could not find buy button for {template_name}")
                 return
 
     def _scan_and_buy(self, region: Optional[Tuple[int, int, int, int]]):

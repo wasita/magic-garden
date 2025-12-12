@@ -19,7 +19,46 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without GUI")
     parser.add_argument("--capture", type=str, help="Capture a template screenshot",
                         choices=["mythical_egg", "mythical_seed", "buy_button"])
+    parser.add_argument("--capture-template", type=str, metavar="NAME",
+                        help="Interactive template capture - click on item to capture (e.g., sunflower_seed)")
     args = parser.parse_args()
+
+    if args.capture_template:
+        # Interactive template capture - click to capture region around mouse
+        import pyautogui
+        from pynput import mouse
+        from PIL import Image
+
+        template_name = args.capture_template
+        print(f"=== Template Capture: {template_name} ===")
+        print("Click on the CENTER of the item you want to capture.")
+        print("A 60x60 region around your click will be saved.")
+        print("Press Ctrl+C to cancel.\n")
+
+        click_pos = None
+
+        def on_click(x, y, button, pressed):
+            nonlocal click_pos
+            if pressed:
+                click_pos = (int(x), int(y))
+                return False
+
+        listener = mouse.Listener(on_click=on_click)
+        listener.start()
+        listener.join()
+
+        if click_pos:
+            x, y = click_pos
+            # Capture 60x60 region centered on click
+            size = 60
+            region = (x - size//2, y - size//2, size, size)
+            screenshot = pyautogui.screenshot(region=region)
+
+            path = f"templates/{template_name}.png"
+            screenshot.save(path)
+            print(f"Saved {size}x{size} template to: {path}")
+            print(f"Captured at click position: ({x}, {y})")
+        return
 
     if args.capture:
         # Quick template capture mode

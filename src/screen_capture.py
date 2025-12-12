@@ -39,18 +39,28 @@ class ScreenCapture:
         frame = np.array(screenshot)
         return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-    def find_template(self, screen: np.ndarray, template_name: str) -> Optional[Tuple[int, int, float]]:
-        """Find a template in the screen capture.
+    def find_template(self, screen: np.ndarray, template_name: str, debug: bool = False) -> Optional[Tuple[int, int, float]]:
+        """Find a template in the screen capture using grayscale matching.
 
         Returns:
             Tuple of (x, y, confidence) for center of match, or None if not found
         """
         if template_name not in self.templates:
+            if debug:
+                print(f"[DEBUG] Template '{template_name}' not loaded")
             return None
 
         template = self.templates[template_name]
-        result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
+
+        # Convert both to grayscale for more robust matching
+        screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+        result = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+        if debug:
+            print(f"[DEBUG] {template_name}: best_conf={max_val:.3f} threshold={self.confidence} at {max_loc}")
 
         if max_val >= self.confidence:
             h, w = template.shape[:2]

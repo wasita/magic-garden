@@ -1,7 +1,9 @@
 {
     "scan_interval": 0.5,
     "click_delay": 0.1,
-    "confidence_threshold": 0.8,
+    "confidence_threshold": 0.6,
+    "window_width": 500,
+    "window_height": 700,
     "monitor_region": [
         940,
         0,
