@@ -11,6 +11,7 @@ dependencies = [
     "pynput>=1.7.6",
     "pytesseract>=0.3.10",
     "easyocr>=1.7.0",
+    "pydirectinput>=1.0.4; sys_platform == 'win32'",
 ]
 
 [project.scripts]

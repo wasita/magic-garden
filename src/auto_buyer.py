@@ -1,5 +1,6 @@
 import time
 import threading
+import platform
 import pyautogui
 from typing import Optional, Callable, Tuple, List
 from .screen_capture import ScreenCapture
@@ -12,9 +13,40 @@ try:
 except ImportError:
     HAS_QUARTZ = False
 
+# For DirectInput on Windows (games ignore pyautogui virtual keys)
+IS_WINDOWS = platform.system() == "Windows"
+if IS_WINDOWS:
+    try:
+        import pydirectinput
+        pydirectinput.PAUSE = 0.1
+        HAS_DIRECTINPUT = True
+    except ImportError:
+        HAS_DIRECTINPUT = False
+        print("Warning: pydirectinput not installed. Key presses may not work in games.")
+        print("Install with: pip install pydirectinput")
+else:
+    HAS_DIRECTINPUT = False
+
 # Safety settings for pyautogui
 pyautogui.FAILSAFE = True  # Move mouse to corner to abort
 pyautogui.PAUSE = 0.1
+
+
+def _press_key(key: str):
+    """Press a key using DirectInput on Windows, pyautogui otherwise."""
+    if IS_WINDOWS and HAS_DIRECTINPUT:
+        pydirectinput.press(key)
+    else:
+        pyautogui.press(key)
+
+
+def _hotkey(*keys):
+    """Press a hotkey combo using DirectInput on Windows, pyautogui otherwise."""
+    if IS_WINDOWS and HAS_DIRECTINPUT:
+        pydirectinput.hotkey(*keys)
+    else:
+        pyautogui.hotkey(*keys)
+
 
 class AutoBuyer:
     def __init__(self, config: Config):
@@ -165,12 +197,12 @@ class AutoBuyer:
             time.sleep(0.5)
 
         # Step 1: Teleport to shop using Shift+1
-        pyautogui.hotkey('shift', '1')
+        _hotkey('shift', '1')
         self._log("Pressed Shift+1 to teleport to shop")
         time.sleep(1.0)  # Wait for teleport
 
         # Step 2: Press space to open Seed Shop panel
-        pyautogui.press('space')
+        _press_key('space')
         self._log("Pressed space to open Seed Shop")
         time.sleep(1.5)  # Wait for shop to open
 
@@ -187,13 +219,13 @@ class AutoBuyer:
                 screen = self.screen.capture_screen(region)
                 if self.screen.find_template(screen, "open_egg_shop"):
                     break
-                pyautogui.press('up')
+                _press_key('up')
                 time.sleep(click_delay * 2)
 
             # Open Egg Shop and buy eggs
             screen = self.screen.capture_screen(region)
             if self.screen.find_template(screen, "open_egg_shop"):
-                pyautogui.press('space')
+                _press_key('space')
                 self._log("Pressed space to open Egg Shop")
                 time.sleep(1.5)  # Wait for shop to open
                 self._buy_all_items_in_shop_with_scroll(region, shop_type="egg")
