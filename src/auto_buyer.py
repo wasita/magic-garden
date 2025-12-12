@@ -5,6 +5,13 @@ from typing import Optional, Callable, Tuple, List
 from .screen_capture import ScreenCapture
 from .config import Config
 
+# For active window detection on macOS
+try:
+    from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionOnScreenOnly, kCGNullWindowID
+    HAS_QUARTZ = True
+except ImportError:
+    HAS_QUARTZ = False
+
 # Safety settings for pyautogui
 pyautogui.FAILSAFE = True  # Move mouse to corner to abort
 pyautogui.PAUSE = 0.1
@@ -102,6 +109,14 @@ class AutoBuyer:
         seed_shop_btn = nav.get("seed_shop_button", "Open Seed Shop")
         egg_shop_btn = nav.get("egg_shop_button", "Open Egg Shop")
 
+        # Try to get active window region, fall back to config
+        active_region = self._get_active_window_region()
+        if active_region:
+            region = active_region
+            self._log(f"Using active window region: {region}")
+        elif region:
+            self._log(f"Using config region: {region}")
+
         # Focus the game window by clicking in the center of the region
         if region:
             center_x = region[0] + region[2] // 2
@@ -110,51 +125,45 @@ class AutoBuyer:
             self._log(f"Clicked center ({center_x}, {center_y}) to focus game")
             time.sleep(0.5)
 
-        # Step 1: Open shop using Shift+1 or keep clicking SHOP until seed shop is visible
-        max_shop_attempts = 10
-        shop_wait = 1.0  # Wait 1 second for shop to open
+        # Step 1: Press space to open Seed Shop panel directly
+        max_shop_attempts = 5
+        shop_wait = 1.5  # Wait for shop to open
 
         for attempt in range(max_shop_attempts):
             if not self.running or self.paused:
                 return
 
             screen = self.screen.capture_screen(region)
-            if self.screen.text_exists(screen, seed_shop_btn):
-                self._log("Shop is open - found 'Open Seed Shop'")
+            # Check if we can see items to buy (shop is open)
+            buy_match = self.screen.find_template(screen, "buy_button")
+
+            if buy_match:
+                self._log("Seed Shop is open - found buy button")
                 break  # Shop is open
 
-            # Alternate between Shift+1 and clicking SHOP
-            if attempt % 2 == 0:
-                pyautogui.hotkey('shift', '1')
-                self._log("Pressed Shift+1 to open shop")
-            else:
-                self._click_text(shop_btn, region)
-
+            # Press space to interact/open seed shop
+            pyautogui.press('space')
+            self._log(f"Pressed space to open Seed Shop (attempt {attempt + 1})")
             time.sleep(shop_wait)
         else:
-            self._log("Could not open shop after multiple attempts")
+            self._log("Could not open Seed Shop after multiple attempts")
             return
 
-        # Step 2: Open Seed Shop and buy seeds (press space to open)
-        screen = self.screen.capture_screen(region)
-        if self.screen.text_exists(screen, seed_shop_btn):
-            pyautogui.press('space')
-            self._log("Pressed space to open Seed Shop")
-            time.sleep(click_delay * 2)
-            self._buy_all_items_in_shop(region, shop_type="seed")
+        # Step 2: Buy seeds from the open shop
+        self._buy_all_items_in_shop(region, shop_type="seed")
 
-        # Step 3: Press up arrow until "Open Egg Shop" is visible
+        # Step 3: Press up arrow until "Open Egg Shop" is visible (template matching)
         max_scroll_attempts = 10
         for _ in range(max_scroll_attempts):
             screen = self.screen.capture_screen(region)
-            if self.screen.text_exists(screen, egg_shop_btn):
+            if self.screen.find_template(screen, "open_egg_shop"):
                 break
             pyautogui.press('up')
             time.sleep(click_delay * 2)
 
         # Step 4: Open Egg Shop and buy eggs (press space to open)
         screen = self.screen.capture_screen(region)
-        if self.screen.text_exists(screen, egg_shop_btn):
+        if self.screen.find_template(screen, "open_egg_shop"):
             pyautogui.press('space')
             self._log("Pressed space to open Egg Shop")
             time.sleep(click_delay * 2)
@@ -375,3 +384,29 @@ class AutoBuyer:
             "running": self.running,
             "paused": self.paused
         }
+
+    def _get_active_window_region(self) -> Optional[Tuple[int, int, int, int]]:
+        """Get the region (x, y, width, height) of the frontmost window on macOS."""
+        if not HAS_QUARTZ:
+            self._log("Quartz not available - using config region")
+            return None
+
+        try:
+            # Get list of all on-screen windows
+            window_list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID)
+
+            for window in window_list:
+                # Layer 0 is typically the frontmost app window
+                if window.get('kCGWindowLayer', 0) == 0:
+                    bounds = window.get('kCGWindowBounds', {})
+                    if bounds:
+                        x = int(bounds.get('X', 0))
+                        y = int(bounds.get('Y', 0))
+                        w = int(bounds.get('Width', 0))
+                        h = int(bounds.get('Height', 0))
+                        if w > 100 and h > 100:  # Filter out tiny windows
+                            return (x, y, w, h)
+        except Exception as e:
+            self._log(f"Error getting active window: {e}")
+
+        return None

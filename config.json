@@ -3,10 +3,10 @@
     "click_delay": 0.1,
     "confidence_threshold": 0.8,
     "monitor_region": [
-        266,
-        86,
-        705,
-        536
+        879,
+        796,
+        48,
+        98
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
@@ -16,7 +16,9 @@
         "dawnbinder_pod": "templates/dawnbinder_pod.png",
         "moonbinder_pod": "templates/moonbinder_pod.png",
         "starweaver_pod": "templates/starweaver_pod.png",
-        "buy_button": "templates/buy_button.png"
+        "buy_button": "templates/buy_button.png",
+        "open_seed_shop": "templates/open_seed_shop.png",
+        "open_egg_shop": "templates/open_egg_shop.png"
     },
     "hotkeys": {
         "toggle": "f6",

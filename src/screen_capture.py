@@ -113,12 +113,13 @@ class ScreenCapture:
         screenshot.save(path)
         print(f"Screenshot saved to: {path}")
 
-    def find_text(self, screen: np.ndarray, search_text: str) -> Optional[Tuple[int, int, int, int]]:
+    def find_text(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int, int, int]]:
         """Find text on screen using OCR.
 
         Args:
             screen: Screenshot as numpy array in BGR format
             search_text: Text to search for (case-insensitive)
+            debug: If True, print all detected text
 
         Returns:
             Tuple of (x, y, width, height) for the text bounding box, or None if not found
@@ -133,23 +134,32 @@ class ScreenCapture:
         data = pytesseract.image_to_data(thresh, output_type=pytesseract.Output.DICT)
 
         search_lower = search_text.lower()
+        search_words = search_lower.split()
+        num_search_words = len(search_words)
         n_boxes = len(data['text'])
 
+        if debug:
+            all_text = [t.strip() for t in data['text'] if t.strip()]
+            print(f"[DEBUG OCR] All detected text: {all_text}")
+
+        # Single word search
         for i in range(n_boxes):
             text = data['text'][i].strip().lower()
             if search_lower in text:
                 x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
                 return (x, y, w, h)
 
-        # Also try matching consecutive words (e.g., "Mythical Egg" might be two words)
-        for i in range(n_boxes - 1):
-            combined = f"{data['text'][i]} {data['text'][i+1]}".strip().lower()
-            if search_lower in combined:
-                x = data['left'][i]
-                y = min(data['top'][i], data['top'][i+1])
-                w = (data['left'][i+1] + data['width'][i+1]) - x
-                h = max(data['height'][i], data['height'][i+1])
-                return (x, y, w, h)
+        # Multi-word search - check sliding window of consecutive words
+        for window_size in range(2, min(num_search_words + 2, n_boxes + 1)):
+            for i in range(n_boxes - window_size + 1):
+                words = [data['text'][i + j].strip() for j in range(window_size)]
+                combined = " ".join(words).lower()
+                if search_lower in combined:
+                    x = data['left'][i]
+                    y = min(data['top'][i + j] for j in range(window_size))
+                    w = (data['left'][i + window_size - 1] + data['width'][i + window_size - 1]) - x
+                    h = max(data['height'][i + j] for j in range(window_size))
+                    return (x, y, w, h)
 
         return None
 
