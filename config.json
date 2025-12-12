@@ -3,10 +3,10 @@
     "click_delay": 0.1,
     "confidence_threshold": 0.8,
     "monitor_region": [
-        267,
-        85,
-        664,
-        537
+        272,
+        44,
+        658,
+        579
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",

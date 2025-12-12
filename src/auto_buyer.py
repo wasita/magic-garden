@@ -131,33 +131,14 @@ class AutoBuyer:
         time.sleep(1.0)  # Wait for teleport
 
         # Step 2: Press space to open Seed Shop panel
-        max_shop_attempts = 5
-        shop_wait = 1.5  # Wait for shop to open
+        pyautogui.press('space')
+        self._log("Pressed space to open Seed Shop")
+        time.sleep(1.5)  # Wait for shop to open
 
-        for attempt in range(max_shop_attempts):
-            if not self.running or self.paused:
-                return
+        # Step 3: Buy seeds from the open shop (scrolling down to see all items)
+        self._buy_all_items_in_shop_with_scroll(region, shop_type="seed")
 
-            screen = self.screen.capture_screen(region)
-            # Check if we can see items to buy (shop is open)
-            buy_match = self.screen.find_template(screen, "buy_button")
-
-            if buy_match:
-                self._log("Seed Shop is open - found buy button")
-                break  # Shop is open
-
-            # Press space to open seed shop
-            pyautogui.press('space')
-            self._log(f"Pressed space to open Seed Shop (attempt {attempt + 1})")
-            time.sleep(shop_wait)
-        else:
-            self._log("Could not open Seed Shop after multiple attempts")
-            return
-
-        # Step 3: Buy seeds from the open shop
-        self._buy_all_items_in_shop(region, shop_type="seed")
-
-        # Step 3: Press up arrow until "Open Egg Shop" is visible (template matching)
+        # Step 4: Press up arrow until "Open Egg Shop" is visible (template matching)
         max_scroll_attempts = 10
         for _ in range(max_scroll_attempts):
             screen = self.screen.capture_screen(region)
@@ -166,13 +147,13 @@ class AutoBuyer:
             pyautogui.press('up')
             time.sleep(click_delay * 2)
 
-        # Step 4: Open Egg Shop and buy eggs (press space to open)
+        # Step 5: Open Egg Shop and buy eggs (press space to open)
         screen = self.screen.capture_screen(region)
         if self.screen.find_template(screen, "open_egg_shop"):
             pyautogui.press('space')
             self._log("Pressed space to open Egg Shop")
-            time.sleep(click_delay * 2)
-            self._buy_all_items_in_shop(region, shop_type="egg")
+            time.sleep(1.5)  # Wait for shop to open
+            self._buy_all_items_in_shop_with_scroll(region, shop_type="egg")
 
     def _click_text(self, text: str, region: Optional[Tuple[int, int, int, int]] = None) -> bool:
         """Find and click on text. Returns True if found and clicked."""
@@ -208,6 +189,45 @@ class AutoBuyer:
 
             # Keep buying this item until NO STOCK
             self._buy_until_no_stock(target, region)
+
+    def _buy_all_items_in_shop_with_scroll(self, region: Optional[Tuple[int, int, int, int]], shop_type: str):
+        """Buy all available items in the shop, scrolling down to see all items."""
+        click_delay = self.config.get("click_delay", 0.1)
+        ocr_targets = self.config.get("ocr_targets", [])
+        max_scroll_pages = 5  # Maximum number of times to scroll down
+
+        # Filter targets based on shop type
+        if shop_type == "seed":
+            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t]
+        else:  # egg
+            targets = [t for t in ocr_targets if "Egg" in t]
+
+        self._log(f"Looking for {shop_type} items: {targets}")
+
+        # Scroll through the shop and buy items on each page
+        for page in range(max_scroll_pages):
+            if not self.running or self.paused:
+                return
+
+            self._log(f"Scanning shop page {page + 1}")
+
+            # Try to buy each target on the current page
+            found_any = False
+            for target in targets:
+                if not self.running or self.paused:
+                    return
+
+                screen = self.screen.capture_screen(region)
+                pos = self.screen.get_text_center(screen, target)
+                if pos:
+                    found_any = True
+                    self._log(f"Found {target} on page {page + 1}")
+                    self._buy_until_no_stock(target, region)
+
+            # Scroll down to see more items
+            pyautogui.press('down')
+            self._log("Scrolled down")
+            time.sleep(click_delay * 3)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears."""
