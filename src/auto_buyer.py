@@ -316,7 +316,10 @@ class AutoBuyer:
                 # Move mouse to center of region before scrolling
                 scroll_x = region[0] + region[2] // 2
                 scroll_y = region[1] + region[3] // 2
+                self._log(f"Moving mouse to center: ({scroll_x}, {scroll_y}) from region {region}")
                 pyautogui.moveTo(scroll_x, scroll_y)
+            else:
+                self._log("WARNING: No region set, cannot center mouse for scroll")
             pyautogui.scroll(-5)  # Negative = scroll down (larger value = faster scroll)
             self._log("Scrolled down")
             time.sleep(0.3)
