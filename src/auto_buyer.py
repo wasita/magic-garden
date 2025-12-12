@@ -95,10 +95,32 @@ class AutoBuyer:
         seed_shop_btn = nav.get("seed_shop_button", "Open Seed Shop")
         egg_shop_btn = nav.get("egg_shop_button", "Open Egg Shop")
 
-        # Step 1: Click "Shop" button
-        if not self._click_text(shop_btn, region):
+        # Step 1: Open shop using Shift+1 or keep clicking SHOP until seed shop is visible
+        max_shop_attempts = 10
+        for _ in range(max_shop_attempts):
+            if not self.running or self.paused:
+                return
+
+            screen = self.screen.capture_screen(region)
+            if self.screen.text_exists(screen, seed_shop_btn):
+                break  # Shop is open
+
+            # Try pressing Shift+1 to open shop
+            pyautogui.hotkey('shift', '1')
+            self._log("Pressed Shift+1 to open shop")
+            time.sleep(click_delay * 3)
+
+            # Check again if shop opened
+            screen = self.screen.capture_screen(region)
+            if self.screen.text_exists(screen, seed_shop_btn):
+                break
+
+            # Fallback: try clicking SHOP button
+            self._click_text(shop_btn, region)
+            time.sleep(click_delay * 3)
+        else:
+            self._log("Could not open shop after multiple attempts")
             return
-        time.sleep(click_delay * 3)  # Wait for shop to open
 
         # Step 2: Open Seed Shop and buy seeds
         if self._click_text(seed_shop_btn, region):

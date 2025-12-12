@@ -7,7 +7,7 @@
     "ocr_targets": ["Mythical Egg", "Sunflower Seed", "Bamboo Seed", "Dawnbinder Pod", "Moonbinder Pod", "Cactus Seed", "Starweaver Pod"],
     "skip_text": ["NO STOCK"],
     "navigation": {
-        "shop_button": "Shop",
+        "shop_button": "SHOP",
         "seed_shop_button": "Open Seed Shop",
         "egg_shop_button": "Open Egg Shop"
     },
