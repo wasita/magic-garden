@@ -60,14 +60,12 @@ class AutoBuyer:
         self.running = True
         self.paused = False
 
-        # Capture game window region from user click
-        self._log("Click on the TOP-LEFT corner of your game window within 3 seconds...")
-        self.game_region = self._wait_for_click_region(timeout=3.0)
+        # Use monitor_region from config
+        self.game_region = self.config.get("monitor_region")
         if self.game_region:
-            self._log(f"Game region set: {self.game_region}")
+            self._log(f"Using config region: {self.game_region}")
         else:
-            self._log("Using config region as fallback")
-            self.game_region = self.config.get("monitor_region")
+            self._log("No region configured - using full screen")
 
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
@@ -80,45 +78,41 @@ class AutoBuyer:
 
         self._log("Auto-buyer started")
 
-    def _wait_for_click_region(self, timeout: float = 10.0) -> Optional[Tuple[int, int, int, int]]:
-        """Wait for user to click and create a region around that point."""
-        import time
-        from pynput import mouse
+    def _wait_for_two_click_region(self, timeout: float = 30.0) -> Optional[Tuple[int, int, int, int]]:
+        """Wait for user to position mouse with countdown."""
+        import pyautogui
 
-        click_pos = None
+        # First corner
+        self._log("Press ENTER, then move mouse to TOP-LEFT corner (3 sec countdown)...")
+        input()
+        for i in range(3, 0, -1):
+            self._log(f"  {i}...")
+            time.sleep(1)
+        pos1 = pyautogui.position()
+        x1, y1 = int(pos1.x), int(pos1.y)
+        self._log(f"Got top-left: ({x1}, {y1})")
 
-        def on_click(x, y, button, pressed):
-            nonlocal click_pos
-            if pressed:
-                click_pos = (x, y)
-                return False  # Stop listener
+        # Second corner
+        self._log("Press ENTER, then move mouse to BOTTOM-RIGHT corner (3 sec countdown)...")
+        input()
+        for i in range(3, 0, -1):
+            self._log(f"  {i}...")
+            time.sleep(1)
+        pos2 = pyautogui.position()
+        x2, y2 = int(pos2.x), int(pos2.y)
+        self._log(f"Got bottom-right: ({x2}, {y2})")
 
-        # Listen for mouse click
-        listener = mouse.Listener(on_click=on_click)
-        listener.start()
+        # Ensure top-left and bottom-right are correct
+        left = min(x1, x2)
+        top = min(y1, y2)
+        right = max(x1, x2)
+        bottom = max(y1, y2)
 
-        start_time = time.time()
-        while click_pos is None and (time.time() - start_time) < timeout:
-            time.sleep(0.1)
+        width = right - left
+        height = bottom - top
 
-        listener.stop()
-
-        if click_pos:
-            # Create region with click as top-left corner
-            window_width = self.config.get("window_width", 500)
-            window_height = self.config.get("window_height", 700)
-
-            # Convert to integers (pynput returns floats on macOS)
-            click_x = int(click_pos[0])
-            click_y = int(click_pos[1])
-
-            # Make sure coords don't go negative
-            x = max(0, click_x)
-            y = max(0, click_y)
-
-            return (x, y, window_width, window_height)
-
-        return None
+        self._log(f"Region defined: ({left}, {top}) to ({right}, {bottom}) = {width}x{height}")
+        return (left, top, width, height)
 
     def stop(self):
         """Stop the auto-buyer."""
@@ -243,16 +237,14 @@ class AutoBuyer:
         click_delay = self.config.get("click_delay", 0.1)
         max_scroll_pages = 20  # Maximum number of times to scroll down
 
-        # Get template names based on shop type
-        templates = self.config.get("templates", {})
+        # Use OCR targets from config
+        ocr_targets = self.config.get("ocr_targets", [])
         if shop_type == "seed":
-            # Filter for seed/pod templates
-            targets = [name for name in templates.keys()
-                      if "seed" in name or "pod" in name]
+            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t]
         else:  # egg
-            targets = [name for name in templates.keys() if "egg" in name]
+            targets = [t for t in ocr_targets if "Egg" in t]
 
-        self._log(f"Looking for {shop_type} items (templates): {targets}")
+        self._log(f"Looking for {shop_type} items (easyocr): {targets}")
 
         # Scroll through the shop and buy items on each page
         for page in range(max_scroll_pages):
@@ -265,17 +257,20 @@ class AutoBuyer:
             found_any = False
             screen = self.screen.capture_screen(region)
 
-            for template_name in targets:
+            # Debug: show what easyocr sees on first few pages
+            if page < 3:
+                self.screen.find_text_easyocr(screen, "DEBUG", debug=True)
+
+            for target in targets:
                 if not self.running or self.paused:
                     return
 
-                # Debug: show confidence scores for all pages
-                match = self.screen.find_template(screen, template_name, debug=True)
-                if match:
+                pos = self.screen.get_text_center_easyocr(screen, target)
+                if pos:
                     found_any = True
-                    rel_x, rel_y, conf = match
-                    self._log(f"Found {template_name} at ({rel_x},{rel_y}) conf={conf:.2f} on page {page + 1}")
-                    self._buy_until_no_stock_template(template_name, region)
+                    rel_x, rel_y = pos
+                    self._log(f"Found '{target}' at ({rel_x},{rel_y}) on page {page + 1}")
+                    self._buy_until_no_stock_ocr(target, region)
                     # Re-capture screen after buying in case layout changed
                     screen = self.screen.capture_screen(region)
 
@@ -360,6 +355,82 @@ class AutoBuyer:
                 if self.on_purchase:
                     item_type = target.lower().replace(" ", "_")
                     self.on_purchase(item_type)
+
+                time.sleep(click_delay)
+            else:
+                self._log(f"Could not find buy button for {target}")
+                return
+
+    def _buy_until_no_stock_ocr(self, target: str, region: Optional[Tuple[int, int, int, int]]):
+        """Keep buying a specific item until NO STOCK appears (easyocr version)."""
+        click_delay = self.config.get("click_delay", 0.1)
+        max_attempts = self.config.get("max_buy_attempts", 50)
+
+        for _ in range(max_attempts):
+            if not self.running or self.paused:
+                return
+
+            screen = self.screen.capture_screen(region)
+
+            # Check if NO STOCK is visible (must be exact "NO STOCK", not "X17 STOCK")
+            if self.screen.find_text_easyocr(screen, "NO STOCK"):
+                self._log(f"{target}: NO STOCK")
+                return
+
+            # Find item using easyocr
+            pos = self.screen.get_text_center_easyocr(screen, target)
+            if not pos:
+                return  # Item not found
+
+            rel_x, rel_y = pos
+            if region:
+                abs_x = rel_x + region[0]
+                abs_y = rel_y + region[1]
+            else:
+                abs_x, abs_y = rel_x, rel_y
+
+            self._log(f"Clicking {target}: ({rel_x},{rel_y}) -> ({abs_x},{abs_y})")
+
+            # Click item to expand accordion
+            pyautogui.click(abs_x, abs_y)
+            self.items_detected += 1
+            self.last_detection_time = time.time()
+            time.sleep(0.8)
+
+            if self.on_detection:
+                self.on_detection(target, (abs_x, abs_y))
+
+            # Look for buy button BELOW where we clicked (accordion expands down)
+            # Capture just the area below the clicked item
+            if region:
+                # Create a sub-region starting from where we clicked, going down
+                buy_region = (region[0], abs_y + 10, region[2], 150)  # 150px tall area below click
+                buy_screen = self.screen.capture_screen(buy_region)
+            else:
+                buy_screen = self.screen.capture_screen(region)
+                buy_region = None
+
+            # Check for NO STOCK after clicking
+            if self.screen.find_text_easyocr(buy_screen, "NO STOCK"):
+                self._log(f"{target}: NO STOCK")
+                return
+
+            # Find buy button via template in the area below the item
+            buy_match = self.screen.find_template(buy_screen, "buy_button")
+            if buy_match:
+                buy_rel_x, buy_rel_y, buy_conf = buy_match
+                if buy_region:
+                    buy_abs_x = buy_rel_x + buy_region[0]
+                    buy_abs_y = buy_rel_y + buy_region[1]
+                else:
+                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+                self._log(f"Clicking buy button at ({buy_abs_x},{buy_abs_y})")
+                pyautogui.click(buy_abs_x, buy_abs_y)
+                self.items_purchased += 1
+                self._log(f"Purchased {target}!")
+
+                if self.on_purchase:
+                    self.on_purchase(target)
 
                 time.sleep(click_delay)
             else:

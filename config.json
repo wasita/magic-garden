@@ -1,14 +1,12 @@
 {
-    "scan_interval": 0.5,
-    "click_delay": 0.1,
+    "scan_interval": 1.0,
+    "click_delay": 0.3,
     "confidence_threshold": 0.6,
-    "window_width": 500,
-    "window_height": 700,
     "monitor_region": [
-        940,
-        0,
-        500,
-        900
+        271,
+        87,
+        645,
+        534
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
@@ -28,6 +26,8 @@
     },
     "sound_alert": true,
     "auto_buy": true,
+    "window_width": 500,
+    "window_height": 700,
     "startup_delay": 3,
     "use_ocr": true,
     "ocr_targets": [
@@ -37,7 +37,8 @@
         "Dawnbinder Pod",
         "Moonbinder Pod",
         "Cactus Seed",
-        "Starweaver Pod"
+        "Starweaver Pod",
+        "Carrot Seed"
     ],
     "skip_text": [
         "NO STOCK"

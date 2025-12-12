@@ -2,9 +2,32 @@ import cv2
 import numpy as np
 import pyautogui
 import pytesseract
+import warnings
 from pathlib import Path
 from typing import Optional, Tuple, List
 from PIL import Image
+
+# Suppress torch warnings
+warnings.filterwarnings("ignore", message=".*pin_memory.*")
+
+# Lazy load easyocr (it's slow to import)
+_easyocr_reader = None
+
+def get_easyocr_reader():
+    global _easyocr_reader
+    if _easyocr_reader is None:
+        import easyocr
+        import torch
+
+        # Check if MPS (M1/M2 GPU) is available
+        use_gpu = torch.backends.mps.is_available()
+        if use_gpu:
+            print("[EasyOCR] Using M1/M2 GPU (MPS)")
+        else:
+            print("[EasyOCR] Using CPU")
+
+        _easyocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
+    return _easyocr_reader
 
 class ScreenCapture:
     def __init__(self, confidence_threshold: float = 0.8):
@@ -225,6 +248,45 @@ class ScreenCapture:
             Tuple of (center_x, center_y) or None if not found
         """
         result = self.find_text(screen, search_text)
+        if result:
+            x, y, w, h = result
+            return (x + w // 2, y + h // 2)
+        return None
+
+    def find_text_easyocr(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int, int, int]]:
+        """Find text on screen using EasyOCR (better for game fonts).
+
+        Returns:
+            Tuple of (x, y, width, height) for the text bounding box, or None
+        """
+        reader = get_easyocr_reader()
+
+        # Convert BGR to RGB for easyocr
+        rgb = cv2.cvtColor(screen, cv2.COLOR_BGR2RGB)
+
+        # Run OCR
+        results = reader.readtext(rgb)
+
+        if debug:
+            all_text = [text for (_, text, _) in results]
+            print(f"[DEBUG EasyOCR] All detected: {all_text}")
+
+        search_lower = search_text.lower()
+
+        for (bbox, text, conf) in results:
+            if search_lower in text.lower():
+                # bbox is [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
+                x1 = int(min(p[0] for p in bbox))
+                y1 = int(min(p[1] for p in bbox))
+                x2 = int(max(p[0] for p in bbox))
+                y2 = int(max(p[1] for p in bbox))
+                return (x1, y1, x2 - x1, y2 - y1)
+
+        return None
+
+    def get_text_center_easyocr(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int]]:
+        """Find text using EasyOCR and return center coordinates."""
+        result = self.find_text_easyocr(screen, search_text, debug=debug)
         if result:
             x, y, w, h = result
             return (x + w // 2, y + h // 2)

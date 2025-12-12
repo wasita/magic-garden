@@ -21,7 +21,52 @@ def main():
                         choices=["mythical_egg", "mythical_seed", "buy_button"])
     parser.add_argument("--capture-template", type=str, metavar="NAME",
                         help="Interactive template capture - click on item to capture (e.g., sunflower_seed)")
+    parser.add_argument("--set-region", action="store_true",
+                        help="Set game region by clicking two corners, saves to config.json")
     args = parser.parse_args()
+
+    if args.set_region:
+        # Set game region interactively
+        import pyautogui
+        import json
+        import time
+
+        print("=== Set Game Region ===")
+        print("1. Press ENTER, then you have 3 seconds to move mouse to TOP-LEFT corner")
+        print("2. Press ENTER again, then 3 seconds to move mouse to BOTTOM-RIGHT corner")
+        print()
+
+        input("Press ENTER, then move mouse to TOP-LEFT corner...")
+        for i in range(3, 0, -1):
+            print(f"  {i}...")
+            time.sleep(1)
+        pos1 = pyautogui.position()
+        print(f"Got top-left: ({pos1.x}, {pos1.y})")
+
+        input("Press ENTER, then move mouse to BOTTOM-RIGHT corner...")
+        for i in range(3, 0, -1):
+            print(f"  {i}...")
+            time.sleep(1)
+        pos2 = pyautogui.position()
+        print(f"Got bottom-right: ({pos2.x}, {pos2.y})")
+
+        # Calculate region
+        left = min(pos1.x, pos2.x)
+        top = min(pos1.y, pos2.y)
+        width = abs(pos2.x - pos1.x)
+        height = abs(pos2.y - pos1.y)
+
+        region = [int(left), int(top), int(width), int(height)]
+        print(f"\nRegion: {region}")
+
+        # Update config.json
+        with open("config.json", "r") as f:
+            config = json.load(f)
+        config["monitor_region"] = region
+        with open("config.json", "w") as f:
+            json.dump(config, f, indent=4)
+        print(f"Saved to config.json!")
+        return
 
     if args.capture_template:
         # Interactive template capture - click to capture region around mouse
