@@ -31,6 +31,7 @@ class AutoBuyer:
 
         # Navigation state
         self.in_shop = False
+        self.game_region: Optional[Tuple[int, int, int, int]] = None
 
         # Callbacks
         self.on_detection: Optional[Callable[[str, Tuple[int, int]], None]] = None
@@ -58,6 +59,16 @@ class AutoBuyer:
 
         self.running = True
         self.paused = False
+
+        # Capture game window region from user click
+        self._log("Click on your game window within 3 seconds...")
+        self.game_region = self._wait_for_click_region(timeout=3.0)
+        if self.game_region:
+            self._log(f"Game region set: {self.game_region}")
+        else:
+            self._log("Using config region as fallback")
+            self.game_region = self.config.get("monitor_region")
+
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
@@ -68,6 +79,47 @@ class AutoBuyer:
             time.sleep(startup_delay)
 
         self._log("Auto-buyer started")
+
+    def _wait_for_click_region(self, timeout: float = 10.0) -> Optional[Tuple[int, int, int, int]]:
+        """Wait for user to click and create a region around that point."""
+        import time
+        from pynput import mouse
+
+        click_pos = None
+
+        def on_click(x, y, button, pressed):
+            nonlocal click_pos
+            if pressed:
+                click_pos = (x, y)
+                return False  # Stop listener
+
+        # Listen for mouse click
+        listener = mouse.Listener(on_click=on_click)
+        listener.start()
+
+        start_time = time.time()
+        while click_pos is None and (time.time() - start_time) < timeout:
+            time.sleep(0.1)
+
+        listener.stop()
+
+        if click_pos:
+            # Create region centered around click point
+            # Default window size (can be configured)
+            window_width = self.config.get("window_width", 500)
+            window_height = self.config.get("window_height", 900)
+
+            # Convert to integers (pynput returns floats on macOS)
+            click_x = int(click_pos[0])
+            x = click_x - window_width // 2
+            y = 0  # Start from top of screen
+
+            # Make sure x doesn't go negative
+            x = max(0, x)
+
+            return (x, y, window_width, window_height)
+
+        return None
 
     def stop(self):
         """Stop the auto-buyer."""
@@ -109,13 +161,10 @@ class AutoBuyer:
         seed_shop_btn = nav.get("seed_shop_button", "Open Seed Shop")
         egg_shop_btn = nav.get("egg_shop_button", "Open Egg Shop")
 
-        # Try to get active window region, fall back to config
-        active_region = self._get_active_window_region()
-        if active_region:
-            region = active_region
-            self._log(f"Using active window region: {region}")
-        elif region:
-            self._log(f"Using config region: {region}")
+        # Use the region captured from user click at startup
+        region = self.game_region
+        if region:
+            self._log(f"Using region: {region}")
 
         # Focus the game window by clicking in the center of the region
         if region:
@@ -224,10 +273,15 @@ class AutoBuyer:
                     self._log(f"Found {target} on page {page + 1}")
                     self._buy_until_no_stock(target, region)
 
-            # Scroll down to see more items
-            pyautogui.press('down')
+            # Scroll down to see more items (use mouse scroll, not arrow keys)
+            if region:
+                # Move mouse to center of region before scrolling
+                scroll_x = region[0] + region[2] // 2
+                scroll_y = region[1] + region[3] // 2
+                pyautogui.moveTo(scroll_x, scroll_y)
+            pyautogui.scroll(-3)  # Negative = scroll down
             self._log("Scrolled down")
-            time.sleep(click_delay * 3)
+            time.sleep(0.5)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears."""
@@ -250,22 +304,29 @@ class AutoBuyer:
             if not pos:
                 return  # Item not found on this screen
 
-            x, y = pos
+            rel_x, rel_y = pos
+            # Add region offset to convert from image coords to screen coords
             if region:
-                x += region[0]
-                y += region[1]
+                abs_x = rel_x + region[0]
+                abs_y = rel_y + region[1]
+            else:
+                abs_x, abs_y = rel_x, rel_y
 
-            # Click item
-            pyautogui.click(x, y)
+            self._log(f"Clicking {target}: relative=({rel_x},{rel_y}) + region offset=({region[0] if region else 0},{region[1] if region else 0}) = absolute=({abs_x},{abs_y})")
+
+            # Click item to expand accordion
+            pyautogui.click(abs_x, abs_y)
             self.items_detected += 1
             self.last_detection_time = time.time()
-            time.sleep(click_delay)
+
+            # Wait for accordion to pop up with buy button
+            time.sleep(0.8)
 
             if self.on_detection:
                 item_type = target.lower().replace(" ", "_")
-                self.on_detection(item_type, (x, y))
+                self.on_detection(item_type, (abs_x, abs_y))
 
-            # Look for buy button (with coin icon) and click it
+            # Look for buy button (with coin icon) that appeared in accordion
             screen = self.screen.capture_screen(region)
 
             # Check again for NO STOCK after clicking item
@@ -276,11 +337,14 @@ class AutoBuyer:
             # Try to find buy button via template or look for price text
             buy_match = self.screen.find_template(screen, "buy_button")
             if buy_match:
-                buy_x, buy_y, _ = buy_match
+                buy_rel_x, buy_rel_y, conf = buy_match
                 if region:
-                    buy_x += region[0]
-                    buy_y += region[1]
-                pyautogui.click(buy_x, buy_y)
+                    buy_abs_x = buy_rel_x + region[0]
+                    buy_abs_y = buy_rel_y + region[1]
+                else:
+                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+                self._log(f"Found buy button: relative=({buy_rel_x},{buy_rel_y}) conf={conf:.2f} -> absolute=({buy_abs_x},{buy_abs_y})")
+                pyautogui.click(buy_abs_x, buy_abs_y)
                 self.items_purchased += 1
                 self._log(f"Purchased {target}!")
 
