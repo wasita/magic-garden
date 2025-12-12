@@ -38,9 +38,9 @@
         "Dawnbinder Pod",
         "Moonbinder Pod",
         "Cactus Seed",
-        "Starweaver Pod",
-        "Carrot Seed"
+        "Starweaver Pod"
     ],
+    "_test_targets_note": "Add 'Carrot Seed' to ocr_targets when testing if buying works",
     "skip_text": [
         "NO STOCK"
     ],
