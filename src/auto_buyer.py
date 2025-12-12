@@ -43,7 +43,11 @@ def _press_key(key: str):
 def _hotkey(*keys):
     """Press a hotkey combo using DirectInput on Windows, pyautogui otherwise."""
     if IS_WINDOWS and HAS_DIRECTINPUT:
-        pydirectinput.hotkey(*keys)
+        # pydirectinput doesn't have hotkey(), so we do it manually
+        for key in keys:
+            pydirectinput.keyDown(key)
+        for key in reversed(keys):
+            pydirectinput.keyUp(key)
     else:
         pyautogui.hotkey(*keys)
 
