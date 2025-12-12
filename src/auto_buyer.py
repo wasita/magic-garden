@@ -445,11 +445,14 @@ class AutoBuyer:
                 max_y_dist = int(150 * scale)  # How far below item to look
                 max_x_dist = int(200 * scale)  # Horizontal tolerance
 
+                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y}..{rel_y + max_y_dist}], x:[{rel_x - max_x_dist}..{rel_x + max_x_dist}]")
+                self._log(f"All green buttons found: {green_buttons}")
+
                 valid_buttons = [(x, y) for x, y in green_buttons
                                 if y > rel_y and y < rel_y + max_y_dist
                                 and abs(x - rel_x) < max_x_dist]
 
-                self._log(f"Found {len(green_buttons)} green buttons, {len(valid_buttons)} valid (scale={scale:.2f}, max_y={max_y_dist}, max_x={max_x_dist})")
+                self._log(f"Valid buttons after filter: {valid_buttons} (scale={scale:.2f})")
 
                 if valid_buttons:
                     best_button = min(valid_buttons, key=lambda b: abs(b[1] - rel_y))
