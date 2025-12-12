@@ -1,12 +1,19 @@
 import json
 import os
+import platform
 from pathlib import Path
+
+# Platform-specific monitor regions
+MONITOR_REGIONS = {
+    "Darwin": [271, 87, 645, 534],   # macOS
+    "Windows": [402, 57, 1638, 1053], # Windows
+}
 
 DEFAULT_CONFIG = {
     "scan_interval": 0.5,
     "click_delay": 0.1,
     "confidence_threshold": 0.8,
-    "monitor_region": None,
+    "monitor_region": MONITOR_REGIONS.get(platform.system()),
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
         "mythical_seed": "templates/mythical_seed.png",
