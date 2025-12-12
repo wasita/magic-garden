@@ -33,13 +33,12 @@
     "use_ocr": true,
     "ocr_targets": [
         "Mythical Egg",
-        "Sunflower Seed",
         "Bamboo Seed",
-        "Dawnbinder Pod",
-        "Moonbinder Pod",
         "Cactus Seed",
+        "Sunflower Seed",
         "Starweaver Pod",
-        "Fava Bean"
+        "Dawnbinder Pod",
+        "Moonbinder Pod"
     ],
     "_test_targets_note": "Add 'Carrot Seed' to ocr_targets when testing if buying works. 'Fava Bean' added to test green icon detection.",
     "skip_text": [

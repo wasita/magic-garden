@@ -22,3 +22,4 @@ Thumbs.db
 
 # Config (user-specific, template provided)
 # config.json
+uv.lock
