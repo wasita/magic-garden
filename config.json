@@ -2,6 +2,7 @@
     "scan_interval": 1.0,
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
+    "shop_mode": "seed",
     "monitor_region": [
         271,
         87,

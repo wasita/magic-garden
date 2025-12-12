@@ -149,11 +149,7 @@ class AutoBuyer:
         """Complete one shop cycle: open shop, buy seeds, buy eggs."""
         self._log("=== Starting new shop cycle ===")
         click_delay = self.config.get("click_delay", 0.1)
-        nav = self.config.get("navigation", {})
-
-        shop_btn = nav.get("shop_button", "Shop")
-        seed_shop_btn = nav.get("seed_shop_button", "Open Seed Shop")
-        egg_shop_btn = nav.get("egg_shop_button", "Open Egg Shop")
+        shop_mode = self.config.get("shop_mode", "both")  # "seed", "egg", or "both"
 
         # Use the region captured from user click at startup
         region = self.game_region
@@ -178,25 +174,29 @@ class AutoBuyer:
         self._log("Pressed space to open Seed Shop")
         time.sleep(1.5)  # Wait for shop to open
 
-        # Step 3: Buy seeds from the open shop (scrolling down to see all items)
-        self._buy_all_items_in_shop_with_scroll(region, shop_type="seed")
+        # Step 3: Buy seeds if enabled
+        if shop_mode in ("seed", "both"):
+            self._log("Scanning seed shop...")
+            self._buy_all_items_in_shop_with_scroll(region, shop_type="seed")
 
-        # Step 4: Press up arrow until "Open Egg Shop" is visible (template matching)
-        max_scroll_attempts = 10
-        for _ in range(max_scroll_attempts):
+        # Step 4: Buy eggs if enabled
+        if shop_mode in ("egg", "both"):
+            # Scroll up to find "Open Egg Shop" button
+            max_scroll_attempts = 10
+            for _ in range(max_scroll_attempts):
+                screen = self.screen.capture_screen(region)
+                if self.screen.find_template(screen, "open_egg_shop"):
+                    break
+                pyautogui.press('up')
+                time.sleep(click_delay * 2)
+
+            # Open Egg Shop and buy eggs
             screen = self.screen.capture_screen(region)
             if self.screen.find_template(screen, "open_egg_shop"):
-                break
-            pyautogui.press('up')
-            time.sleep(click_delay * 2)
-
-        # Step 5: Open Egg Shop and buy eggs (press space to open)
-        screen = self.screen.capture_screen(region)
-        if self.screen.find_template(screen, "open_egg_shop"):
-            pyautogui.press('space')
-            self._log("Pressed space to open Egg Shop")
-            time.sleep(1.5)  # Wait for shop to open
-            self._buy_all_items_in_shop_with_scroll(region, shop_type="egg")
+                pyautogui.press('space')
+                self._log("Pressed space to open Egg Shop")
+                time.sleep(1.5)  # Wait for shop to open
+                self._buy_all_items_in_shop_with_scroll(region, shop_type="egg")
 
         self._log("=== Shop cycle complete, restarting... ===")
 
