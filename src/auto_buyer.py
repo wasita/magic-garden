@@ -289,7 +289,7 @@ class AutoBuyer:
 
         # Filter targets based on shop type
         if shop_type == "seed":
-            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t]
+            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t or "Bean" in t]
         else:  # egg
             targets = [t for t in ocr_targets if "Egg" in t]
 
@@ -308,7 +308,7 @@ class AutoBuyer:
         # Use OCR targets from config
         ocr_targets = self.config.get("ocr_targets", [])
         if shop_type == "seed":
-            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t]
+            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t or "Bean" in t]
         else:  # egg
             targets = [t for t in ocr_targets if "Egg" in t]
 
