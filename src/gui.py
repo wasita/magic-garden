@@ -164,7 +164,6 @@ class BotGUI:
 
             # Save to config
             self.config.set("monitor_region", region)
-            self.config.save()
             self._log("Region saved to config.json!")
 
         threading.Thread(target=capture_region, daemon=True).start()

@@ -1,6 +1,7 @@
 {
     "scan_interval": 0.5,
     "click_delay": 0.1,
+    "startup_delay": 3,
     "confidence_threshold": 0.8,
     "monitor_region": null,
     "use_ocr": true,
