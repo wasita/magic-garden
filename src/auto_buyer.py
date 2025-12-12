@@ -473,14 +473,15 @@ class AutoBuyer:
                 # Filter: button should be BELOW the item (within reasonable Y range)
                 # Scale thresholds based on region size (Mac baseline: 534 height)
                 scale = region[3] / 534 if region else 1.0
+                min_y_dist = int(30 * scale)   # Skip elements on same row (like cactus icon)
                 max_y_dist = int(200 * scale)  # How far below item to look
 
-                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y}..{rel_y + max_y_dist}]")
+                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y + min_y_dist}..{rel_y + max_y_dist}]")
                 self._log(f"All green buttons found: {green_buttons}")
 
-                # Filter: only buttons below the item within max_y_dist
+                # Filter: only buttons below the item (not on same row, within max distance)
                 valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y and y < rel_y + max_y_dist]
+                                if y > rel_y + min_y_dist and y < rel_y + max_y_dist]
 
                 self._log(f"Valid buttons after Y filter: {valid_buttons} (scale={scale:.2f})")
 
