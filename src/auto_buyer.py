@@ -181,6 +181,30 @@ class AutoBuyer:
 
             time.sleep(scan_interval)
 
+    def _dismiss_popups(self, region: Optional[Tuple[int, int, int, int]]) -> bool:
+        """Check for and dismiss any pop-ups (daily bread, daily streak, etc.).
+
+        Returns:
+            True if a pop-up was dismissed, False otherwise
+        """
+        screen = self.screen.capture_screen(region)
+        close_btn = self.screen.find_close_button(screen, debug=False)
+
+        if close_btn:
+            rel_x, rel_y = close_btn
+            if region:
+                abs_x = rel_x + region[0]
+                abs_y = rel_y + region[1]
+            else:
+                abs_x, abs_y = rel_x, rel_y
+
+            self._log(f"Found pop-up, clicking close button at ({abs_x}, {abs_y})")
+            pyautogui.click(abs_x, abs_y)
+            time.sleep(0.5)
+            return True
+
+        return False
+
     def _shop_cycle(self, region: Optional[Tuple[int, int, int, int]]):
         """Complete one shop cycle: open shop, buy seeds, buy eggs."""
         self._log("=== Starting new shop cycle ===")
@@ -199,6 +223,11 @@ class AutoBuyer:
             pyautogui.click(center_x, center_y)
             self._log(f"Clicked center ({center_x}, {center_y}) to focus game")
             time.sleep(0.5)
+
+        # Dismiss any pop-ups before starting
+        while self._dismiss_popups(region):
+            self._log("Dismissed a pop-up, checking for more...")
+            time.sleep(0.3)
 
         # Step 1: Teleport to shop using Shift+1
         _hotkey('shift', '1')
@@ -441,24 +470,25 @@ class AutoBuyer:
             green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
             if green_buttons:
-                # Filter: button should be BELOW the item and within range horizontally
+                # Filter: button should be BELOW the item (within reasonable Y range)
                 # Scale thresholds based on region size (Mac baseline: 534 height)
                 scale = region[3] / 534 if region else 1.0
-                max_y_dist = int(150 * scale)  # How far below item to look
-                max_x_dist = int(200 * scale)  # Horizontal tolerance
+                max_y_dist = int(200 * scale)  # How far below item to look
 
-                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y}..{rel_y + max_y_dist}], x:[{rel_x - max_x_dist}..{rel_x + max_x_dist}]")
+                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y}..{rel_y + max_y_dist}]")
                 self._log(f"All green buttons found: {green_buttons}")
 
+                # Filter: only buttons below the item within max_y_dist
                 valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y and y < rel_y + max_y_dist
-                                and abs(x - rel_x) < max_x_dist]
+                                if y > rel_y and y < rel_y + max_y_dist]
 
-                self._log(f"Valid buttons after filter: {valid_buttons} (scale={scale:.2f})")
+                self._log(f"Valid buttons after Y filter: {valid_buttons} (scale={scale:.2f})")
 
                 if valid_buttons:
-                    best_button = min(valid_buttons, key=lambda b: abs(b[1] - rel_y))
+                    # Pick the button closest below (smallest Y distance first, then X as tiebreaker)
+                    best_button = min(valid_buttons, key=lambda b: (b[1] - rel_y, abs(b[0] - rel_x)))
                     buy_rel_x, buy_rel_y = best_button
+                    self._log(f"Selected button at ({buy_rel_x},{buy_rel_y}) - y_dist={buy_rel_y - rel_y}, x_dist={abs(buy_rel_x - rel_x)}")
 
                     if region:
                         buy_abs_x = buy_rel_x + region[0]

@@ -455,3 +455,56 @@ class ScreenCapture:
         # Sort by area (largest first) and return centers only
         buttons.sort(key=lambda b: b[2], reverse=True)
         return [(x, y) for x, y, _ in buttons]
+
+    def find_close_button(self, screen: np.ndarray, debug: bool = False) -> Optional[Tuple[int, int]]:
+        """Find white X close button for dismissing pop-ups.
+
+        Returns:
+            (center_x, center_y) of the close button, or None if not found
+        """
+        # Convert to HSV for color detection
+        hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
+
+        # White/light gray X button (low saturation, high value)
+        lower_white = np.array([0, 0, 200])
+        upper_white = np.array([180, 30, 255])
+
+        # Create mask for white pixels
+        mask = cv2.inRange(hsv, lower_white, upper_white)
+
+        # Find contours
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Scale area thresholds based on screen size (Mac baseline: 645x534)
+        screen_h, screen_w = screen.shape[:2]
+        scale = (screen_w * screen_h) / (645 * 534)
+        # X button is typically small and square-ish
+        min_area = int(100 * scale)
+        max_area = int(2000 * scale)
+
+        if debug:
+            print(f"[DEBUG] Looking for close button, scale={scale:.2f}, area range={min_area}-{max_area}")
+
+        candidates = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > min_area and area < max_area:
+                x, y, w, h = cv2.boundingRect(contour)
+                # X button should be roughly square
+                aspect_ratio = w / h if h > 0 else 0
+                if 0.5 < aspect_ratio < 2.0:
+                    # Prefer buttons in top-right area of screen (common for close buttons)
+                    center_x = x + w // 2
+                    center_y = y + h // 2
+                    # Score: prefer top-right
+                    score = center_x - center_y  # Higher x, lower y = higher score
+                    candidates.append((center_x, center_y, score))
+                    if debug:
+                        print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area}")
+
+        if candidates:
+            # Return the most likely close button (top-right preference)
+            candidates.sort(key=lambda c: c[2], reverse=True)
+            return (candidates[0][0], candidates[0][1])
+
+        return None
