@@ -312,19 +312,23 @@ class ScreenCapture:
             print(f"[DEBUG] STOCK Y positions: {stock_positions}")
 
         # Build fuzzy patterns for each target
-        # Require at least 6 chars to reduce false positives (e.g., "flower" matching wrong items)
+        # Require at least 5 chars to catch OCR fragments like "arrot" for "Carrot"
+        # but avoid short words like "seed" (4 chars) or "pod" (3 chars)
         target_patterns = {}
         for target in targets:
             patterns = []
             for word in target.lower().split():
-                if len(word) >= 6:
+                if len(word) >= 5:
                     patterns.append(word)
-                    # Only add substrings that are still 6+ chars
-                    for start in range(1, min(3, len(word) - 5)):
+                    # Add substrings (dropping first 1-2 chars) that are still 5+ chars
+                    for start in range(1, min(3, len(word) - 4)):
                         substring = word[start:]
-                        if len(substring) >= 6:
+                        if len(substring) >= 5:
                             patterns.append(substring)
             target_patterns[target] = patterns
+
+        if debug:
+            print(f"[DEBUG] Fuzzy patterns: {target_patterns}")
 
         # Find items that have STOCK on the same line (within 60px Y)
         for i in range(n_boxes):
@@ -343,18 +347,23 @@ class ScreenCapture:
             # Check if this text matches any target
             for target, patterns in target_patterns.items():
                 matched = False
-                # Exact match
-                if target.lower() in text or text in target.lower():
+                # Exact match - require the distinguishing word (not just "seed" or "pod")
+                # Check if text matches the first word of target (e.g., "carrot" for "Carrot Seed")
+                target_words = target.lower().split()
+                first_word = target_words[0] if target_words else ""
+                if len(text) >= 5 and (first_word in text or text in first_word):
                     matched = True
-                # Fuzzy match
+                # Fuzzy match - require 5+ char match
                 if not matched:
                     for pattern in patterns:
-                        if pattern in text or text in pattern:
+                        if len(pattern) >= 5 and (pattern in text or (len(text) >= 5 and text in pattern)):
                             matched = True
                             break
 
                 if matched:
                     found_items.append((target, item_x, item_y))
+                    if debug:
+                        print(f"[DEBUG] Matched '{text}' to '{target}'")
                     break  # Don't match same text to multiple targets
 
         return found_items

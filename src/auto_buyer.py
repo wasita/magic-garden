@@ -147,6 +147,7 @@ class AutoBuyer:
 
     def _shop_cycle(self, region: Optional[Tuple[int, int, int, int]]):
         """Complete one shop cycle: open shop, buy seeds, buy eggs."""
+        self._log("=== Starting new shop cycle ===")
         click_delay = self.config.get("click_delay", 0.1)
         nav = self.config.get("navigation", {})
 
@@ -197,6 +198,8 @@ class AutoBuyer:
             time.sleep(1.5)  # Wait for shop to open
             self._buy_all_items_in_shop_with_scroll(region, shop_type="egg")
 
+        self._log("=== Shop cycle complete, restarting... ===")
+
     def _click_text(self, text: str, region: Optional[Tuple[int, int, int, int]] = None) -> bool:
         """Find and click on text. Returns True if found and clicked."""
         screen = self.screen.capture_screen(region)
@@ -235,7 +238,7 @@ class AutoBuyer:
     def _buy_all_items_in_shop_with_scroll(self, region: Optional[Tuple[int, int, int, int]], shop_type: str):
         """Buy all available items in the shop, scrolling down to see all items."""
         click_delay = self.config.get("click_delay", 0.1)
-        max_scroll_pages = 20  # Maximum number of times to scroll down
+        max_scroll_pages = 25  # Scroll through all pages
 
         # Use OCR targets from config
         ocr_targets = self.config.get("ocr_targets", [])
@@ -244,7 +247,7 @@ class AutoBuyer:
         else:  # egg
             targets = [t for t in ocr_targets if "Egg" in t]
 
-        self._log(f"Looking for {shop_type} items (easyocr): {targets}")
+        self._log(f"Looking for {shop_type} items: {targets}")
 
         # Scroll through the shop and buy items on each page
         for page in range(max_scroll_pages):
@@ -253,29 +256,24 @@ class AutoBuyer:
 
             self._log(f"Scanning shop page {page + 1}")
 
-            # Try to buy each target on the current page
-            found_any = False
+            # Scan current page for items
             screen = self.screen.capture_screen(region)
 
             # Find items with STOCK on the same line (single OCR pass - fast!)
             shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=(page == 0))
 
             if shop_items:
-                self._log(f"[DEBUG] Found {len(shop_items)} items with STOCK: {[(name, x, y) for name, x, y in shop_items]}")
+                self._log(f"Found {len(shop_items)} items on page {page + 1}")
 
             for target, rel_x, rel_y in shop_items:
                 if not self.running or self.paused:
                     return
 
-                found_any = True
-                self._log(f"Found '{target}' at ({rel_x},{rel_y}) on page {page + 1}")
+                self._log(f"Buying '{target}' at ({rel_x},{rel_y})")
                 # Pass position directly - don't re-search with OCR
                 self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
                 # Re-capture screen after buying in case layout changed
                 screen = self.screen.capture_screen(region)
-
-            if not found_any:
-                self._log(f"No targets found on page {page + 1}")
 
             # Scroll down to see more items (use mouse scroll, not arrow keys)
             if region:
