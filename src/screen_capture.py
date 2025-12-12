@@ -351,12 +351,21 @@ class ScreenCapture:
                 # Check if text matches the first word of target (e.g., "carrot" for "Carrot Seed")
                 target_words = target.lower().split()
                 first_word = target_words[0] if target_words else ""
-                if len(text) >= 4 and len(first_word) >= 4 and (first_word in text or text in first_word):
+                # For short words (4 chars), require exact match or text equals first word
+                if len(first_word) == 4:
+                    if text == first_word:
+                        matched = True
+                # For longer words (5+ chars), allow substring matching
+                elif len(text) >= 5 and len(first_word) >= 5 and (first_word in text or text in first_word):
                     matched = True
-                # Fuzzy match - require 4+ char match
+                # Fuzzy match - only for 5+ char patterns
                 if not matched:
                     for pattern in patterns:
-                        if len(pattern) >= 4 and (pattern in text or (len(text) >= 4 and text in pattern)):
+                        if len(pattern) >= 5 and (pattern in text or (len(text) >= 5 and text in pattern)):
+                            matched = True
+                            break
+                        # Exact match for 4-char patterns
+                        elif len(pattern) == 4 and text == pattern:
                             matched = True
                             break
 
@@ -442,13 +451,16 @@ class ScreenCapture:
             # Filter by size - scaled for screen resolution
             if area > min_area and area < max_area:
                 x, y, w, h = cv2.boundingRect(contour)
-                # Button should be wider than tall (rectangular)
-                if w > h * 0.5:
+                # Buy button should be wider than tall (rectangular, not labels like "uncommon")
+                # Require width > height (true button shape)
+                if w > h * 1.2:
                     center_x = x + w // 2
                     center_y = y + h // 2
                     buttons.append((center_x, center_y, area))
                     if debug:
-                        print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area}")
+                        print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area} ratio={w/h:.2f}")
+                elif debug:
+                    print(f"[DEBUG] Rejected shape: size={w}x{h} ratio={w/h:.2f} (need w > h*1.2)")
             elif debug and area > 100:
                 print(f"[DEBUG] Rejected contour: area={area} (need {min_area}-{max_area})")
 

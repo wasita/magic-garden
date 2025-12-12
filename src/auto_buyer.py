@@ -487,8 +487,8 @@ class AutoBuyer:
                 self._log(f"Valid buttons after Y filter: {valid_buttons} (scale={scale:.2f})")
 
                 if valid_buttons:
-                    # Pick the button closest below (smallest Y distance first, then X as tiebreaker)
-                    best_button = min(valid_buttons, key=lambda b: (b[1] - rel_y, abs(b[0] - rel_x)))
+                    # Pick the button closest below (smallest Y distance only)
+                    best_button = min(valid_buttons, key=lambda b: b[1])  # Smallest Y = highest on screen = closest below item
                     buy_rel_x, buy_rel_y = best_button
                     self._log(f"Selected button at ({buy_rel_x},{buy_rel_y}) - y_dist={buy_rel_y - rel_y}, x_dist={abs(buy_rel_x - rel_x)}")
 
