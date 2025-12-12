@@ -314,16 +314,18 @@ class ScreenCapture:
         # Build fuzzy patterns for each target
         # Require at least 4 chars to catch words like "fava", "bean"
         # but avoid very short words like "pod" (3 chars)
+        # Exclude common category words that would match everything
+        common_words = {"seed", "seeds", "pod", "pods", "bean", "beans", "egg", "eggs"}
         target_patterns = {}
         for target in targets:
             patterns = []
             for word in target.lower().split():
-                if len(word) >= 4:
+                if len(word) >= 4 and word not in common_words:
                     patterns.append(word)
                     # Add substrings (dropping first 1-2 chars) that are still 4+ chars
                     for start in range(1, min(3, len(word) - 3)):
                         substring = word[start:]
-                        if len(substring) >= 4:
+                        if len(substring) >= 4 and substring not in common_words:
                             patterns.append(substring)
             target_patterns[target] = patterns
 
