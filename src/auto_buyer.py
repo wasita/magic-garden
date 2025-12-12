@@ -257,22 +257,22 @@ class AutoBuyer:
             found_any = False
             screen = self.screen.capture_screen(region)
 
-            # Debug: show what easyocr sees on first few pages
-            if page < 3:
-                self.screen.find_text_easyocr(screen, "DEBUG", debug=True)
+            # Find items with STOCK on the same line (single OCR pass - fast!)
+            shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=(page == 0))
 
-            for target in targets:
+            if shop_items:
+                self._log(f"[DEBUG] Found {len(shop_items)} items with STOCK: {[(name, x, y) for name, x, y in shop_items]}")
+
+            for target, rel_x, rel_y in shop_items:
                 if not self.running or self.paused:
                     return
 
-                pos = self.screen.get_text_center_easyocr(screen, target)
-                if pos:
-                    found_any = True
-                    rel_x, rel_y = pos
-                    self._log(f"Found '{target}' at ({rel_x},{rel_y}) on page {page + 1}")
-                    self._buy_until_no_stock_ocr(target, region)
-                    # Re-capture screen after buying in case layout changed
-                    screen = self.screen.capture_screen(region)
+                found_any = True
+                self._log(f"Found '{target}' at ({rel_x},{rel_y}) on page {page + 1}")
+                # Pass position directly - don't re-search with OCR
+                self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
+                # Re-capture screen after buying in case layout changed
+                screen = self.screen.capture_screen(region)
 
             if not found_any:
                 self._log(f"No targets found on page {page + 1}")
@@ -361,19 +361,21 @@ class AutoBuyer:
                 self._log(f"Could not find buy button for {target}")
                 return
 
-    def _buy_until_no_stock_ocr(self, target: str, region: Optional[Tuple[int, int, int, int]]):
+    def _buy_until_no_stock_ocr(self, target: str, region: Optional[Tuple[int, int, int, int]], item_pos: Optional[Tuple[int, int]] = None):
         """Keep buying a specific item until NO STOCK appears (easyocr version)."""
         click_delay = self.config.get("click_delay", 0.1)
         max_attempts = self.config.get("max_buy_attempts", 50)
 
-        # First, find and click the item to open accordion
-        screen = self.screen.capture_screen(region)
-        pos = self.screen.get_text_center_easyocr(screen, target)
-        if not pos:
-            self._log(f"Could not find {target}")
-            return
-
-        rel_x, rel_y = pos
+        # Use provided position or search with EasyOCR
+        if item_pos:
+            rel_x, rel_y = item_pos
+        else:
+            screen = self.screen.capture_screen(region)
+            pos = self.screen.get_text_center_easyocr(screen, target)
+            if not pos:
+                self._log(f"Could not find {target}")
+                return
+            rel_x, rel_y = pos
         if region:
             abs_x = rel_x + region[0]
             abs_y = rel_y + region[1]

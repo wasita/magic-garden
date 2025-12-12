@@ -152,13 +152,14 @@ class ScreenCapture:
         screenshot.save(path)
         print(f"Screenshot saved to: {path}")
 
-    def find_text(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int, int, int]]:
+    def find_text(self, screen: np.ndarray, search_text: str, debug: bool = False, fuzzy: bool = True) -> Optional[Tuple[int, int, int, int]]:
         """Find text on screen using OCR.
 
         Args:
             screen: Screenshot as numpy array in BGR format
             search_text: Text to search for (case-insensitive)
             debug: If True, print all detected text
+            fuzzy: If True, accept partial matches (e.g., "awberry" matches "Strawberry")
 
         Returns:
             Tuple of (x, y, width, height) for the text bounding box, or None if not found
@@ -174,22 +175,47 @@ class ScreenCapture:
 
         search_lower = search_text.lower()
         search_words = search_lower.split()
-        num_search_words = len(search_words)
         n_boxes = len(data['text'])
 
         if debug:
             all_text = [t.strip() for t in data['text'] if t.strip()]
             print(f"[DEBUG OCR] All detected text: {all_text}")
 
+        # Build list of partial matches to accept (for fuzzy matching)
+        # e.g., "Strawberry Seed" -> ["strawberry", "trawberry", "rawberry", "awberry", "seed"]
+        fuzzy_patterns = []
+        if fuzzy:
+            for word in search_words:
+                if len(word) >= 4:
+                    fuzzy_patterns.append(word)  # Full word
+                    # Add substrings (dropping first 1-3 chars)
+                    for start in range(1, min(4, len(word) - 2)):
+                        substring = word[start:]
+                        if len(substring) >= 4:
+                            fuzzy_patterns.append(substring)
+
         # Single word search
         for i in range(n_boxes):
             text = data['text'][i].strip().lower()
-            if search_lower in text:
+            if not text or len(text) < 3:
+                continue
+
+            # Check exact match first
+            if search_lower in text or text in search_lower:
                 x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
                 return (x, y, w, h)
 
+            # Check fuzzy patterns (both directions)
+            if fuzzy:
+                for pattern in fuzzy_patterns:
+                    # pattern in text: we're looking for "awberry", text is "awberry Seed"
+                    # text in pattern: text is "awberry", pattern is "strawberry"
+                    if (len(pattern) >= 4 and pattern in text) or (len(text) >= 4 and text in pattern):
+                        x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                        return (x, y, w, h)
+
         # Multi-word search - check sliding window of consecutive words
-        for window_size in range(2, min(num_search_words + 2, n_boxes + 1)):
+        for window_size in range(2, min(len(search_words) + 2, n_boxes + 1)):
             for i in range(n_boxes - window_size + 1):
                 words = [data['text'][i + j].strip() for j in range(window_size)]
                 combined = " ".join(words).lower()
@@ -258,6 +284,80 @@ class ScreenCapture:
             x, y, w, h = result
             return (x + w // 2, y + h // 2)
         return None
+
+    def find_shop_items_with_stock(self, screen: np.ndarray, targets: list, debug: bool = False) -> List[Tuple[str, int, int]]:
+        """Find shop items that have STOCK visible on the same line.
+
+        Returns:
+            List of (item_name, center_x, center_y) for items with STOCK nearby
+        """
+        gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+        data = pytesseract.image_to_data(thresh, output_type=pytesseract.Output.DICT)
+
+        n_boxes = len(data['text'])
+        found_items = []
+
+        # First, find all STOCK positions
+        stock_positions = []
+        for i in range(n_boxes):
+            text = data['text'][i].strip().lower()
+            if 'stock' in text or 'stoc' in text:
+                y = data['top'][i] + data['height'][i] // 2
+                stock_positions.append(y)
+
+        if debug:
+            all_text = [t.strip() for t in data['text'] if t.strip()]
+            print(f"[DEBUG] All text: {all_text}")
+            print(f"[DEBUG] STOCK Y positions: {stock_positions}")
+
+        # Build fuzzy patterns for each target
+        # Require at least 6 chars to reduce false positives (e.g., "flower" matching wrong items)
+        target_patterns = {}
+        for target in targets:
+            patterns = []
+            for word in target.lower().split():
+                if len(word) >= 6:
+                    patterns.append(word)
+                    # Only add substrings that are still 6+ chars
+                    for start in range(1, min(3, len(word) - 5)):
+                        substring = word[start:]
+                        if len(substring) >= 6:
+                            patterns.append(substring)
+            target_patterns[target] = patterns
+
+        # Find items that have STOCK on the same line (within 60px Y)
+        for i in range(n_boxes):
+            text = data['text'][i].strip().lower()
+            if not text or len(text) < 4:
+                continue
+
+            item_y = data['top'][i] + data['height'][i] // 2
+            item_x = data['left'][i] + data['width'][i] // 2
+
+            # Check if there's a STOCK on the same line
+            has_stock_on_line = any(abs(stock_y - item_y) < 60 for stock_y in stock_positions)
+            if not has_stock_on_line:
+                continue
+
+            # Check if this text matches any target
+            for target, patterns in target_patterns.items():
+                matched = False
+                # Exact match
+                if target.lower() in text or text in target.lower():
+                    matched = True
+                # Fuzzy match
+                if not matched:
+                    for pattern in patterns:
+                        if pattern in text or text in pattern:
+                            matched = True
+                            break
+
+                if matched:
+                    found_items.append((target, item_x, item_y))
+                    break  # Don't match same text to multiple targets
+
+        return found_items
 
     def find_text_easyocr(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int, int, int]]:
         """Find text on screen using EasyOCR (better for game fonts).

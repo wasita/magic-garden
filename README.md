@@ -1,6 +1,6 @@
 # magic garden auto-buyer bot
 
-Automatically monitors and purchases mythical eggs and seeds in the Magic Garden game.
+Automatically monitors and purchases seeds in the Magic Garden game.
 
 ## Features
 
@@ -45,6 +45,7 @@ uv sync
 ```
 
 This will:
+
 - Install the correct Python version (3.10)
 - Create a virtual environment in `.venv/`
 - Install all dependencies from the lock file
