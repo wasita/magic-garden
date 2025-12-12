@@ -243,7 +243,7 @@ class AutoBuyer:
         """Buy all available items in the shop, scrolling down to see all items."""
         click_delay = self.config.get("click_delay", 0.1)
         ocr_targets = self.config.get("ocr_targets", [])
-        max_scroll_pages = 5  # Maximum number of times to scroll down
+        max_scroll_pages = 20  # Maximum number of times to scroll down
 
         # Filter targets based on shop type
         if shop_type == "seed":
@@ -279,9 +279,9 @@ class AutoBuyer:
                 scroll_x = region[0] + region[2] // 2
                 scroll_y = region[1] + region[3] // 2
                 pyautogui.moveTo(scroll_x, scroll_y)
-            pyautogui.scroll(-3)  # Negative = scroll down
+            pyautogui.scroll(-5)  # Negative = scroll down (larger value = faster scroll)
             self._log("Scrolled down")
-            time.sleep(0.5)
+            time.sleep(0.3)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears."""
