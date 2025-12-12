@@ -1,18 +1,13 @@
 {
     "scan_interval": 0.5,
     "click_delay": 0.1,
-    "startup_delay": 3,
     "confidence_threshold": 0.8,
-    "monitor_region": null,
-    "use_ocr": true,
-    "ocr_targets": ["Mythical Egg", "Sunflower Seed", "Bamboo Seed", "Dawnbinder Pod", "Moonbinder Pod", "Cactus Seed", "Starweaver Pod"],
-    "skip_text": ["NO STOCK"],
-    "navigation": {
-        "shop_button": "SHOP",
-        "seed_shop_button": "Open Seed Shop",
-        "egg_shop_button": "Open Egg Shop"
-    },
-    "max_buy_attempts": 20,
+    "monitor_region": [
+        266,
+        86,
+        705,
+        536
+    ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
         "sunflower_seed": "templates/sunflower_seed.png",
@@ -28,5 +23,25 @@
         "stop": "f7"
     },
     "sound_alert": true,
-    "auto_buy": true
+    "auto_buy": true,
+    "startup_delay": 3,
+    "use_ocr": true,
+    "ocr_targets": [
+        "Mythical Egg",
+        "Sunflower Seed",
+        "Bamboo Seed",
+        "Dawnbinder Pod",
+        "Moonbinder Pod",
+        "Cactus Seed",
+        "Starweaver Pod"
+    ],
+    "skip_text": [
+        "NO STOCK"
+    ],
+    "navigation": {
+        "shop_button": "SHOP",
+        "seed_shop_button": "Open Seed Shop",
+        "egg_shop_button": "Open Egg Shop"
+    },
+    "max_buy_attempts": 20
 }
