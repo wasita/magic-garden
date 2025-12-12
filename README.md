@@ -15,33 +15,58 @@ Automatically monitors and purchases mythical eggs and seeds in the Magic Garden
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- [uv](https://docs.astral.sh/uv/) (recommended) or Python 3.10+
 - Magic Garden game installed
 
-### Installation
+### Installation with uv (Recommended)
 
-#### macOS
+uv automatically manages Python versions and dependencies.
+
+#### Install uv
+
+**macOS/Linux:**
 
 ```bash
-# Install Python if needed (via Homebrew)
-brew install python
-
-# Clone and setup
-cd magic-garden
-python3 -m pip install -r requirements.txt
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-#### Windows
+**Windows (PowerShell):**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+#### Clone and Setup
 
 ```bash
-# Download Python from python.org if needed
-
-# Clone and setup
+git clone <your-repo-url>
 cd magic-garden
+uv sync
+```
+
+This will:
+- Install the correct Python version (3.10)
+- Create a virtual environment in `.venv/`
+- Install all dependencies from the lock file
+
+### Alternative: Manual pip Installation
+
+If you prefer not to use uv:
+
+```bash
+cd magic-garden
+python -m venv .venv
+
+# macOS/Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
 pip install -r requirements.txt
 ```
 
-### Creating Templates
+## Creating Templates
 
 Before the bot can detect items, you need to capture template images:
 
@@ -49,13 +74,14 @@ Before the bot can detect items, you need to capture template images:
 2. Run the template capture tool:
 
 ```bash
-# Capture mythical egg template
+# With uv
+uv run python main.py --capture mythical_egg
+uv run python main.py --capture mythical_seed
+uv run python main.py --capture buy_button
+
+# Without uv (venv activated)
 python main.py --capture mythical_egg
-
-# Capture mythical seed template
 python main.py --capture mythical_seed
-
-# Capture buy button template
 python main.py --capture buy_button
 ```
 
@@ -72,6 +98,10 @@ python main.py --capture buy_button
 ### GUI Mode (Recommended)
 
 ```bash
+# With uv
+uv run python main.py
+
+# Without uv (venv activated)
 python main.py
 ```
 
@@ -84,6 +114,10 @@ Controls:
 ### Headless Mode (AFK)
 
 ```bash
+# With uv
+uv run python main.py --headless
+
+# Without uv (venv activated)
 python main.py --headless
 ```
 
@@ -95,12 +129,19 @@ Edit `config.json` to customize:
 
 ```json
 {
-    "scan_interval": 0.5,      // Seconds between scans
-    "click_delay": 0.1,        // Delay after clicks
-    "confidence_threshold": 0.8, // Match sensitivity (0-1)
-    "auto_buy": true           // Auto-purchase when detected
+    "scan_interval": 0.5,
+    "click_delay": 0.1,
+    "confidence_threshold": 0.8,
+    "auto_buy": true
 }
 ```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `scan_interval` | Seconds between screen scans | 0.5 |
+| `click_delay` | Delay after clicking (seconds) | 0.1 |
+| `confidence_threshold` | Image match sensitivity (0-1) | 0.8 |
+| `auto_buy` | Automatically purchase when detected | true |
 
 ## Troubleshooting
 
@@ -117,4 +158,14 @@ Edit `config.json` to customize:
 
 **macOS permissions:**
 
-- Grant accessibility permissions to Terminal/Python in System Preferences > Security & Privacy > Privacy > Accessibility
+- Grant accessibility permissions in System Settings > Privacy & Security > Accessibility
+- Add Terminal (or your IDE) to the allowed apps
+
+**Windows permissions:**
+
+- Run as Administrator if clicks aren't registering
+- Disable "UI Access" protection in some games
+
+## Disclaimer
+
+Use at your own risk. Automation may violate the game's terms of service.
