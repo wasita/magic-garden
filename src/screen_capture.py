@@ -312,18 +312,18 @@ class ScreenCapture:
             print(f"[DEBUG] STOCK Y positions: {stock_positions}")
 
         # Build fuzzy patterns for each target
-        # Require at least 5 chars to catch OCR fragments like "arrot" for "Carrot"
-        # but avoid short words like "seed" (4 chars) or "pod" (3 chars)
+        # Require at least 4 chars to catch words like "fava", "bean"
+        # but avoid very short words like "pod" (3 chars)
         target_patterns = {}
         for target in targets:
             patterns = []
             for word in target.lower().split():
-                if len(word) >= 5:
+                if len(word) >= 4:
                     patterns.append(word)
-                    # Add substrings (dropping first 1-2 chars) that are still 5+ chars
-                    for start in range(1, min(3, len(word) - 4)):
+                    # Add substrings (dropping first 1-2 chars) that are still 4+ chars
+                    for start in range(1, min(3, len(word) - 3)):
                         substring = word[start:]
-                        if len(substring) >= 5:
+                        if len(substring) >= 4:
                             patterns.append(substring)
             target_patterns[target] = patterns
 
@@ -351,12 +351,12 @@ class ScreenCapture:
                 # Check if text matches the first word of target (e.g., "carrot" for "Carrot Seed")
                 target_words = target.lower().split()
                 first_word = target_words[0] if target_words else ""
-                if len(text) >= 5 and (first_word in text or text in first_word):
+                if len(text) >= 4 and len(first_word) >= 4 and (first_word in text or text in first_word):
                     matched = True
-                # Fuzzy match - require 5+ char match
+                # Fuzzy match - require 4+ char match
                 if not matched:
                     for pattern in patterns:
-                        if len(pattern) >= 5 and (pattern in text or (len(text) >= 5 and text in pattern)):
+                        if len(pattern) >= 4 and (pattern in text or (len(text) >= 4 and text in pattern)):
                             matched = True
                             break
 
