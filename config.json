@@ -1,0 +1,17 @@
+{
+    "scan_interval": 0.5,
+    "click_delay": 0.1,
+    "confidence_threshold": 0.8,
+    "monitor_region": null,
+    "templates": {
+        "mythical_egg": "templates/mythical_egg.png",
+        "mythical_seed": "templates/mythical_seed.png",
+        "buy_button": "templates/buy_button.png"
+    },
+    "hotkeys": {
+        "toggle": "f6",
+        "stop": "f7"
+    },
+    "sound_alert": true,
+    "auto_buy": true
+}
