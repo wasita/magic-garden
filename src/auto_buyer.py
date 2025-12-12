@@ -303,7 +303,11 @@ class AutoBuyer:
     def _buy_all_items_in_shop_with_scroll(self, region: Optional[Tuple[int, int, int, int]], shop_type: str):
         """Buy all available items in the shop, scrolling down to see all items."""
         click_delay = self.config.get("click_delay", 0.1)
-        max_scroll_pages = 25  # Scroll through all pages
+        max_scroll_pages = 100  # Safety limit, but we stop when we see end marker
+
+        # End marker - last item in shop (stop scrolling when we see this)
+        # Use just the unique word for fuzzy matching (case-insensitive)
+        end_marker = "moonbinder" if shop_type == "seed" else "mythical"
 
         # Use OCR targets from config
         ocr_targets = self.config.get("ocr_targets", [])
@@ -313,6 +317,7 @@ class AutoBuyer:
             targets = [t for t in ocr_targets if "Egg" in t]
 
         self._log(f"Looking for {shop_type} items: {targets}")
+        self._log(f"Will scroll until '{end_marker}' is visible")
 
         # Scroll through the shop and buy items on each page
         for page in range(max_scroll_pages):
@@ -349,6 +354,11 @@ class AutoBuyer:
                 pyautogui.moveTo(scroll_x, scroll_y)
             else:
                 self._log("WARNING: No region set, cannot center mouse for scroll")
+            # Check if we've reached the end of the shop (end marker visible)
+            if self.screen.text_exists(screen, end_marker):
+                self._log(f"Reached end of shop (found '{end_marker}')")
+                break
+
             # Windows scroll is more granular, need larger value
             # Use smaller scroll with shorter delay to avoid skipping items
             scroll_amount = -50 if IS_WINDOWS else -5
