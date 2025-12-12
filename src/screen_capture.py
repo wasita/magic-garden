@@ -93,7 +93,7 @@ class ScreenCapture:
 
         return None
 
-    def find_all_matches(self, screen: np.ndarray, template_name: str) -> List[Tuple[int, int, float]]:
+    def find_all_matches(self, screen: np.ndarray, template_name: str, min_conf: float = None) -> List[Tuple[int, int, float]]:
         """Find all instances of a template in the screen capture.
 
         Returns:
@@ -103,8 +103,14 @@ class ScreenCapture:
             return []
 
         template = self.templates[template_name]
-        result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
-        locations = np.where(result >= self.confidence)
+
+        # Convert to grayscale for better matching
+        screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+        template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+        result = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+        threshold = min_conf if min_conf is not None else self.confidence
+        locations = np.where(result >= threshold)
 
         matches = []
         h, w = template.shape[:2]
@@ -291,3 +297,41 @@ class ScreenCapture:
             x, y, w, h = result
             return (x + w // 2, y + h // 2)
         return None
+
+    def find_green_buttons(self, screen: np.ndarray, debug: bool = False) -> List[Tuple[int, int]]:
+        """Find green buy buttons by color detection.
+
+        Returns:
+            List of (center_x, center_y) for each green button found
+        """
+        # Convert to HSV for better color detection
+        hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
+
+        # The buy button green (extracted from template: H=53, S=153, V=172)
+        # Use a range around these values
+        lower_green = np.array([43, 120, 140])
+        upper_green = np.array([63, 255, 255])
+
+        # Create mask for green pixels
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+
+        # Find contours (connected green regions)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        buttons = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            # Filter by size - buy button should be roughly 50-200px wide
+            if area > 500 and area < 10000:
+                x, y, w, h = cv2.boundingRect(contour)
+                # Button should be wider than tall (rectangular)
+                if w > h * 0.5:
+                    center_x = x + w // 2
+                    center_y = y + h // 2
+                    buttons.append((center_x, center_y, area))
+                    if debug:
+                        print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area}")
+
+        # Sort by area (largest first) and return centers only
+        buttons.sort(key=lambda b: b[2], reverse=True)
+        return [(x, y) for x, y, _ in buttons]

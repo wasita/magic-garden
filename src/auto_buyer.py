@@ -400,41 +400,53 @@ class AutoBuyer:
             if self.on_detection:
                 self.on_detection(target, (abs_x, abs_y))
 
-            # Look for buy button BELOW where we clicked (accordion expands down)
-            # Capture just the area below the clicked item
-            if region:
-                # Create a sub-region starting from where we clicked, going down
-                buy_region = (region[0], abs_y + 10, region[2], 150)  # 150px tall area below click
-                buy_screen = self.screen.capture_screen(buy_region)
-            else:
-                buy_screen = self.screen.capture_screen(region)
-                buy_region = None
+            # Look for buy button near where we clicked
+            # Wait a bit longer for accordion to fully open
+            time.sleep(0.5)
+
+            screen = self.screen.capture_screen(region)
 
             # Check for NO STOCK after clicking
-            if self.screen.find_text_easyocr(buy_screen, "NO STOCK"):
+            if self.screen.find_text_easyocr(screen, "NO STOCK"):
                 self._log(f"{target}: NO STOCK")
                 return
 
-            # Find buy button via template in the area below the item
-            buy_match = self.screen.find_template(buy_screen, "buy_button")
-            if buy_match:
-                buy_rel_x, buy_rel_y, buy_conf = buy_match
-                if buy_region:
-                    buy_abs_x = buy_rel_x + buy_region[0]
-                    buy_abs_y = buy_rel_y + buy_region[1]
+            # Find green buy buttons by color detection
+            green_buttons = self.screen.find_green_buttons(screen, debug=True)
+            self._log(f"[DEBUG] Found {len(green_buttons)} green buttons, clicked item at ({rel_x},{rel_y})")
+
+            if green_buttons:
+                # Filter: button should be BELOW and within 200px horizontally of where we clicked
+                valid_buttons = [(x, y) for x, y in green_buttons
+                                if y > rel_y and y < rel_y + 150  # Below but not too far
+                                and abs(x - rel_x) < 200]  # Within 200px horizontally
+                self._log(f"[DEBUG] Valid green buttons near click: {valid_buttons}")
+
+                if valid_buttons:
+                    # Pick the closest one to where we clicked
+                    best_button = min(valid_buttons, key=lambda b: abs(b[1] - rel_y))
+                    buy_rel_x, buy_rel_y = best_button
+
+                    if region:
+                        buy_abs_x = buy_rel_x + region[0]
+                        buy_abs_y = buy_rel_y + region[1]
+                    else:
+                        buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+
+                    self._log(f"Clicking green buy button at ({buy_abs_x},{buy_abs_y})")
+                    pyautogui.click(buy_abs_x, buy_abs_y)
+                    self.items_purchased += 1
+                    self._log(f"Purchased {target}!")
+
+                    if self.on_purchase:
+                        self.on_purchase(target)
+
+                    time.sleep(click_delay)
                 else:
-                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
-                self._log(f"Clicking buy button at ({buy_abs_x},{buy_abs_y})")
-                pyautogui.click(buy_abs_x, buy_abs_y)
-                self.items_purchased += 1
-                self._log(f"Purchased {target}!")
-
-                if self.on_purchase:
-                    self.on_purchase(target)
-
-                time.sleep(click_delay)
+                    self._log(f"Green buttons found but none near item, skipping")
+                    return
             else:
-                self._log(f"Could not find buy button for {target}")
+                self._log(f"No green buttons found for {target}")
                 return
 
     def _buy_until_no_stock_template(self, template_name: str, region: Optional[Tuple[int, int, int, int]]):
