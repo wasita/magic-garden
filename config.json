@@ -3,9 +3,17 @@
     "click_delay": 0.1,
     "confidence_threshold": 0.8,
     "monitor_region": null,
+    "use_ocr": true,
+    "ocr_targets": ["Mythical Egg", "Sunflower Seed", "Bamboo Seed", "Dawnbinder Pod", "Moonbinder Pod", "Cactus Seed", "Starweaver Pod"],
+    "skip_text": ["NO STOCK"],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
-        "mythical_seed": "templates/mythical_seed.png",
+        "sunflower_seed": "templates/sunflower_seed.png",
+        "bamboo_seed": "templates/bamboo_seed.png",
+        "cactus_seed": "templates/cactus_seed.png",
+        "dawnbinder_pod": "templates/dawnbinder_pod.png",
+        "moonbinder_pod": "templates/moonbinder_pod.png",
+        "starweaver_pod": "templates/starweaver_pod.png",
         "buy_button": "templates/buy_button.png"
     },
     "hotkeys": {
