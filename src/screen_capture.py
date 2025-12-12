@@ -418,8 +418,8 @@ class ScreenCapture:
 
         # The buy button green (extracted from template: H=53, S=153, V=172)
         # Use a range around these values
-        lower_green = np.array([43, 120, 140])
-        upper_green = np.array([63, 255, 255])
+        lower_green = np.array([43, 100, 120])  # Widened range for PC
+        upper_green = np.array([75, 255, 255])
 
         # Create mask for green pixels
         mask = cv2.inRange(hsv, lower_green, upper_green)
@@ -427,11 +427,20 @@ class ScreenCapture:
         # Find contours (connected green regions)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+        # Scale area thresholds based on screen size (Mac baseline: 645x534)
+        screen_h, screen_w = screen.shape[:2]
+        scale = (screen_w * screen_h) / (645 * 534)
+        min_area = int(500 * scale)
+        max_area = int(10000 * scale)
+
+        if debug:
+            print(f"[DEBUG] Screen {screen_w}x{screen_h}, scale={scale:.2f}, area range={min_area}-{max_area}")
+
         buttons = []
         for contour in contours:
             area = cv2.contourArea(contour)
-            # Filter by size - buy button should be roughly 50-200px wide
-            if area > 500 and area < 10000:
+            # Filter by size - scaled for screen resolution
+            if area > min_area and area < max_area:
                 x, y, w, h = cv2.boundingRect(contour)
                 # Button should be wider than tall (rectangular)
                 if w > h * 0.5:
@@ -440,6 +449,8 @@ class ScreenCapture:
                     buttons.append((center_x, center_y, area))
                     if debug:
                         print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area}")
+            elif debug and area > 100:
+                print(f"[DEBUG] Rejected contour: area={area} (need {min_area}-{max_area})")
 
         # Sort by area (largest first) and return centers only
         buttons.sort(key=lambda b: b[2], reverse=True)

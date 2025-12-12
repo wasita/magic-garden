@@ -436,7 +436,7 @@ class AutoBuyer:
             screen = self.screen.capture_screen(region)
 
             # Find green buy buttons by color detection (fast!)
-            green_buttons = self.screen.find_green_buttons(screen, debug=False)
+            green_buttons = self.screen.find_green_buttons(screen, debug=True)
 
             if green_buttons:
                 # Filter: button should be BELOW the item and within range horizontally
