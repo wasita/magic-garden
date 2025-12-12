@@ -321,7 +321,7 @@ class AutoBuyer:
             else:
                 self._log("WARNING: No region set, cannot center mouse for scroll")
             # Windows scroll is more granular, need larger value
-            scroll_amount = -50 if IS_WINDOWS else -5
+            scroll_amount = -150 if IS_WINDOWS else -5
             pyautogui.scroll(scroll_amount)
             self._log("Scrolled down")
             time.sleep(0.3)
