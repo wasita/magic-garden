@@ -56,7 +56,9 @@ class BotGUI:
         self.stop_btn = ttk.Button(button_frame, text="Stop (F7)", command=self._stop_bot)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        ttk.Button(button_frame, text="Capture Template", command=self._capture_template).pack(side=tk.LEFT)
+        ttk.Button(button_frame, text="Capture Template", command=self._capture_template).pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Button(button_frame, text="Set Region", command=self._set_region).pack(side=tk.LEFT)
 
         # Stats section
         stats_frame = ttk.LabelFrame(main_frame, text="Statistics", padding="5")
@@ -134,6 +136,38 @@ class BotGUI:
         self.buyer.stop()
         self.status_label.config(text="Stopped")
         self.start_btn.config(text="Start (F6)")
+
+    def _set_region(self):
+        """Set the monitor region by clicking two corners."""
+        import pyautogui
+
+        self._log("Click TOP-LEFT corner of game window in 3s...")
+
+        def capture_region():
+            import time
+            time.sleep(3)
+
+            # Get first corner
+            x1, y1 = pyautogui.position()
+            self._log(f"Got top-left: ({x1}, {y1})")
+            self._log("Now click BOTTOM-RIGHT corner in 3s...")
+
+            time.sleep(3)
+
+            # Get second corner
+            x2, y2 = pyautogui.position()
+            self._log(f"Got bottom-right: ({x2}, {y2})")
+
+            # Calculate region (x, y, width, height)
+            region = [min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1)]
+            self._log(f"Region set: {region}")
+
+            # Save to config
+            self.config.set("monitor_region", region)
+            self.config.save()
+            self._log("Region saved to config.json!")
+
+        threading.Thread(target=capture_region, daemon=True).start()
 
     def _capture_template(self):
         """Capture a template screenshot."""

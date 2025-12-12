@@ -53,6 +53,13 @@ class AutoBuyer:
         self.paused = False
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
+
+        # Startup delay to let user focus the game window
+        startup_delay = self.config.get("startup_delay", 3)
+        if startup_delay > 0:
+            self._log(f"Starting in {startup_delay}s - focus the game window!")
+            time.sleep(startup_delay)
+
         self._log("Auto-buyer started")
 
     def stop(self):
