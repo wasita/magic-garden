@@ -38,9 +38,10 @@
         "Dawnbinder Pod",
         "Moonbinder Pod",
         "Cactus Seed",
-        "Starweaver Pod"
+        "Starweaver Pod",
+        "Fava Bean"
     ],
-    "_test_targets_note": "Add 'Carrot Seed' to ocr_targets when testing if buying works",
+    "_test_targets_note": "Add 'Carrot Seed' to ocr_targets when testing if buying works. 'Fava Bean' added to test green icon detection.",
     "skip_text": [
         "NO STOCK"
     ],
