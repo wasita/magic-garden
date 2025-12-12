@@ -1,2 +1,2 @@
-# magic-farm
+# magic-garden
 
