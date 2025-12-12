@@ -224,10 +224,10 @@ class AutoBuyer:
             self._log(f"Clicked center ({center_x}, {center_y}) to focus game")
             time.sleep(0.5)
 
-        # Dismiss any pop-ups before starting
-        while self._dismiss_popups(region):
-            self._log("Dismissed a pop-up, checking for more...")
-            time.sleep(0.3)
+        # TODO: Re-enable pop-up dismissal once we can distinguish from chat window
+        # while self._dismiss_popups(region):
+        #     self._log("Dismissed a pop-up, checking for more...")
+        #     time.sleep(0.3)
 
         # Step 1: Teleport to shop using Shift+1
         _hotkey('shift', '1')
