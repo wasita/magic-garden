@@ -105,9 +105,14 @@ class AutoBuyer:
             time.sleep(click_delay * 2)
             self._buy_all_items_in_shop(region, shop_type="seed")
 
-        # Step 3: Press up arrow to scroll to Egg Shop
-        pyautogui.press('up')
-        time.sleep(click_delay * 2)
+        # Step 3: Press up arrow until "Open Egg Shop" is visible
+        max_scroll_attempts = 10
+        for _ in range(max_scroll_attempts):
+            screen = self.screen.capture_screen(region)
+            if self.screen.text_exists(screen, egg_shop_btn):
+                break
+            pyautogui.press('up')
+            time.sleep(click_delay * 2)
 
         # Step 4: Open Egg Shop and buy eggs
         if self._click_text(egg_shop_btn, region):
