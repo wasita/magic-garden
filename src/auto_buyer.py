@@ -320,7 +320,9 @@ class AutoBuyer:
                 pyautogui.moveTo(scroll_x, scroll_y)
             else:
                 self._log("WARNING: No region set, cannot center mouse for scroll")
-            pyautogui.scroll(-5)  # Negative = scroll down (larger value = faster scroll)
+            # Windows scroll is more granular, need larger value
+            scroll_amount = -15 if IS_WINDOWS else -5
+            pyautogui.scroll(scroll_amount)
             self._log("Scrolled down")
             time.sleep(0.3)
 
@@ -436,7 +438,7 @@ class AutoBuyer:
             screen = self.screen.capture_screen(region)
 
             # Find green buy buttons by color detection (fast!)
-            green_buttons = self.screen.find_green_buttons(screen, debug=True)
+            green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
             if green_buttons:
                 # Filter: button should be BELOW the item and within range horizontally
