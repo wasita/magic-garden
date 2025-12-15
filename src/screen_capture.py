@@ -285,11 +285,11 @@ class ScreenCapture:
             return (x + w // 2, y + h // 2)
         return None
 
-    def find_shop_items_with_stock(self, screen: np.ndarray, targets: list, debug: bool = False) -> List[Tuple[str, int, int]]:
-        """Find shop items that have STOCK visible on the same line.
+    def find_shop_items(self, screen: np.ndarray, targets: list, debug: bool = False) -> List[Tuple[str, int, int]]:
+        """Find shop items by name (regardless of stock status).
 
         Returns:
-            List of (item_name, center_x, center_y) for items with STOCK nearby
+            List of (item_name, center_x, center_y) for matching items
         """
         gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
@@ -298,22 +298,11 @@ class ScreenCapture:
         n_boxes = len(data['text'])
         found_items = []
 
-        # First, find all STOCK positions
-        stock_positions = []
-        for i in range(n_boxes):
-            text = data['text'][i].strip().lower()
-            if 'stock' in text or 'stoc' in text:
-                y = data['top'][i] + data['height'][i] // 2
-                stock_positions.append(y)
-
         if debug:
             all_text = [t.strip() for t in data['text'] if t.strip()]
             print(f"[DEBUG] All text: {all_text}")
-            print(f"[DEBUG] STOCK Y positions: {stock_positions}")
 
         # Build fuzzy patterns for each target
-        # Require at least 4 chars to catch words like "fava", "bean"
-        # but avoid very short words like "pod" (3 chars)
         # Exclude common category words that would match everything
         common_words = {"seed", "seeds", "pod", "pods", "bean", "beans", "egg", "eggs"}
         target_patterns = {}
@@ -329,10 +318,7 @@ class ScreenCapture:
                             patterns.append(substring)
             target_patterns[target] = patterns
 
-        if debug:
-            print(f"[DEBUG] Fuzzy patterns: {target_patterns}")
-
-        # Find items that have STOCK on the same line (within 60px Y)
+        # Find items matching target names
         for i in range(n_boxes):
             text = data['text'][i].strip().lower()
             if not text or len(text) < 4:
@@ -341,32 +327,25 @@ class ScreenCapture:
             item_y = data['top'][i] + data['height'][i] // 2
             item_x = data['left'][i] + data['width'][i] // 2
 
-            # Check if there's a STOCK on the same line
-            has_stock_on_line = any(abs(stock_y - item_y) < 60 for stock_y in stock_positions)
-            if not has_stock_on_line:
-                continue
-
             # Check if this text matches any target
             for target, patterns in target_patterns.items():
                 matched = False
-                # Exact match - require the distinguishing word (not just "seed" or "pod")
-                # Check if text matches the first word of target (e.g., "carrot" for "Carrot Seed")
                 target_words = target.lower().split()
                 first_word = target_words[0] if target_words else ""
-                # For short words (4 chars), require exact match or text equals first word
+
+                # For short words (4 chars), require exact match
                 if len(first_word) == 4:
                     if text == first_word:
                         matched = True
                 # For longer words (5+ chars), allow substring matching
                 elif len(text) >= 5 and len(first_word) >= 5 and (first_word in text or text in first_word):
                     matched = True
-                # Fuzzy match - only for 5+ char patterns
+                # Fuzzy match
                 if not matched:
                     for pattern in patterns:
                         if len(pattern) >= 5 and (pattern in text or (len(text) >= 5 and text in pattern)):
                             matched = True
                             break
-                        # Exact match for 4-char patterns
                         elif len(pattern) == 4 and text == pattern:
                             matched = True
                             break
@@ -378,6 +357,10 @@ class ScreenCapture:
                     break  # Don't match same text to multiple targets
 
         return found_items
+
+    def find_shop_items_with_stock(self, screen: np.ndarray, targets: list, debug: bool = False) -> List[Tuple[str, int, int]]:
+        """Find shop items that have STOCK visible on the same line (legacy function)."""
+        return self.find_shop_items(screen, targets, debug)
 
     def find_text_easyocr(self, screen: np.ndarray, search_text: str, debug: bool = False) -> Optional[Tuple[int, int, int, int]]:
         """Find text on screen using EasyOCR (better for game fonts).

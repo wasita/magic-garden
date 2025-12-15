@@ -359,12 +359,10 @@ class AutoBuyer:
                 self._log(f"Reached end of shop (found '{end_marker}')")
                 break
 
-            # Windows scroll is more granular, need larger value
-            # Use smaller scroll with shorter delay to avoid skipping items
-            scroll_amount = -50 if IS_WINDOWS else -5
+            # Scroll down
+            scroll_amount = -80 if IS_WINDOWS else -8
             pyautogui.scroll(scroll_amount)
-            self._log("Scrolled down")
-            time.sleep(0.15 if IS_WINDOWS else 0.3)
+            time.sleep(0.1 if IS_WINDOWS else 0.2)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (OCR version)."""
@@ -465,7 +463,16 @@ class AutoBuyer:
         pyautogui.click(abs_x, abs_y)
         self.items_detected += 1
         self.last_detection_time = time.time()
-        time.sleep(0.5)  # Wait for accordion to open
+        time.sleep(1.2)  # Wait for accordion to fully open
+
+        # Re-detect item position in case view scrolled after click
+        screen = self.screen.capture_screen(region)
+        new_pos = self.screen.get_text_center(screen, target.split()[0])  # Use first word (e.g., "Cactus")
+        if new_pos:
+            new_rel_x, new_rel_y = new_pos
+            if abs(new_rel_y - rel_y) > 20:  # View shifted significantly
+                self._log(f"View shifted! Item moved from y={rel_y} to y={new_rel_y}")
+                rel_x, rel_y = new_rel_x, new_rel_y
 
         if self.on_detection:
             self.on_detection(target, (abs_x, abs_y))
@@ -478,7 +485,7 @@ class AutoBuyer:
             screen = self.screen.capture_screen(region)
 
             # Find green buy buttons by color detection (fast!)
-            green_buttons = self.screen.find_green_buttons(screen, debug=False)
+            green_buttons = self.screen.find_green_buttons(screen, debug=True)
 
             if green_buttons:
                 # Filter: button should be BELOW the item and roughly same X (directly below)
@@ -488,8 +495,6 @@ class AutoBuyer:
                 max_y_dist = int(200 * scale)  # How far below item to look
                 max_x_dist = int(100 * scale)  # Button should be roughly below item, not far left/right
 
-                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y + min_y_dist}..{rel_y + max_y_dist}], x:[{rel_x - max_x_dist}..{rel_x + max_x_dist}]")
-                self._log(f"All green buttons found: {green_buttons}")
 
                 # Filter: buttons below item AND roughly same horizontal position
                 valid_buttons = [(x, y) for x, y in green_buttons
