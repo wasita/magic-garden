@@ -360,11 +360,10 @@ class AutoBuyer:
                 break
 
             # Windows scroll is more granular, need larger value
-            # Use smaller scroll with shorter delay to avoid skipping items
-            scroll_amount = -50 if IS_WINDOWS else -5
+            scroll_amount = -100 if IS_WINDOWS else -10
             pyautogui.scroll(scroll_amount)
             self._log("Scrolled down")
-            time.sleep(0.15 if IS_WINDOWS else 0.3)
+            time.sleep(0.08 if IS_WINDOWS else 0.15)
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (OCR version)."""
