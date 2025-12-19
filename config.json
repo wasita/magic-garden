@@ -2,12 +2,11 @@
     "scan_interval": 1.0,
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
-    "shop_mode": "seed",
     "monitor_region": [
-        271,
-        87,
-        645,
-        534
+        767,
+        399,
+        889,
+        545
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
@@ -27,6 +26,7 @@
     },
     "sound_alert": true,
     "auto_buy": true,
+    "shop_mode": "seed",
     "window_width": 500,
     "window_height": 700,
     "startup_delay": 3,
