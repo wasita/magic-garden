@@ -3,10 +3,10 @@
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
     "monitor_region": [
-        767,
-        399,
-        889,
-        545
+        761,
+        471,
+        881,
+        779
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
@@ -34,6 +34,8 @@
     "ocr_targets": [
         "Mythical Egg",
         "Bamboo Seed",
+        "Poinsettia Seed",
+        "Pinecone",
         "Cactus Seed",
         "Sunflower Seed",
         "Starweaver Pod",
