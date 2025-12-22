@@ -1,4 +1,5 @@
 {
+    "detection_mode": "ocr",
     "scan_interval": 1.0,
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
@@ -51,5 +52,92 @@
         "seed_shop_button": "Open Seed Shop",
         "egg_shop_button": "Open Egg Shop"
     },
-    "max_buy_attempts": 20
+    "max_buy_attempts": 20,
+
+    "discord": {
+        "remote_debugging_port": 9222,
+        "game_frame_selector": "iframe",
+        "_note": "Launch Discord with: discord --remote-debugging-port=9222"
+    },
+
+    "dom_selectors": {
+        "shop": {
+            "container": ".shop-container",
+            "item_row": ".shop-item",
+            "item_name": ".item-name",
+            "stock_indicator": ".stock",
+            "no_stock_class": "out-of-stock",
+            "_note": "These selectors need to be discovered using Discord DevTools"
+        },
+        "buttons": {
+            "buy": ".buy-button, button[class*='buy'], [data-action='buy']",
+            "close": ".close-button, .modal-close, [aria-label='Close'], button[class*='close']",
+            "open_seed_shop": "[data-action='open-seed-shop'], button:has-text('Seed Shop')",
+            "open_egg_shop": "[data-action='open-egg-shop'], button:has-text('Egg Shop')"
+        },
+        "navigation": {
+            "shop_teleport": "[data-action='teleport-shop']"
+        }
+    },
+
+    "dom_targets": [
+        {
+            "name": "Mythical Egg",
+            "selector": "[data-item='mythical-egg'], .shop-item:has-text('Mythical Egg')",
+            "type": "egg",
+            "enabled": true
+        },
+        {
+            "name": "Bamboo Seed",
+            "selector": "[data-item='bamboo-seed'], .shop-item:has-text('Bamboo')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Poinsettia Seed",
+            "selector": "[data-item='poinsettia-seed'], .shop-item:has-text('Poinsettia')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Pinecone",
+            "selector": "[data-item='pinecone'], .shop-item:has-text('Pinecone')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Cactus Seed",
+            "selector": "[data-item='cactus-seed'], .shop-item:has-text('Cactus')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Sunflower Seed",
+            "selector": "[data-item='sunflower-seed'], .shop-item:has-text('Sunflower')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Starweaver Pod",
+            "selector": "[data-item='starweaver-pod'], .shop-item:has-text('Starweaver')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Dawnbinder Pod",
+            "selector": "[data-item='dawnbinder-pod'], .shop-item:has-text('Dawnbinder')",
+            "type": "seed",
+            "enabled": true
+        },
+        {
+            "name": "Moonbinder Pod",
+            "selector": "[data-item='moonbinder-pod'], .shop-item:has-text('Moonbinder')",
+            "type": "seed",
+            "enabled": true
+        }
+    ],
+
+    "fallback": {
+        "use_ocr_if_dom_fails": true
+    }
 }

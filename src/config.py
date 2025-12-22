@@ -10,6 +10,7 @@ MONITOR_REGIONS = {
 }
 
 DEFAULT_CONFIG = {
+    "detection_mode": "ocr",  # "ocr" or "dom"
     "scan_interval": 0.5,
     "click_delay": 0.1,
     "confidence_threshold": 0.8,
@@ -24,7 +25,31 @@ DEFAULT_CONFIG = {
         "stop": "f7"
     },
     "sound_alert": True,
-    "auto_buy": True
+    "auto_buy": True,
+    # DOM detection settings
+    "discord": {
+        "remote_debugging_port": 9222,
+        "game_frame_selector": "iframe"
+    },
+    "dom_selectors": {
+        "shop": {
+            "container": ".shop-container",
+            "item_row": ".shop-item",
+            "item_name": ".item-name",
+            "stock_indicator": ".stock",
+            "no_stock_class": "out-of-stock"
+        },
+        "buttons": {
+            "buy": ".buy-button",
+            "close": ".close-button",
+            "open_seed_shop": "[data-action='open-seed-shop']",
+            "open_egg_shop": "[data-action='open-egg-shop']"
+        }
+    },
+    "dom_targets": [],
+    "fallback": {
+        "use_ocr_if_dom_fails": True
+    }
 }
 
 class Config:
@@ -37,17 +62,31 @@ class Config:
             try:
                 with open(self.config_path, 'r') as f:
                     loaded = json.load(f)
-                    merged = DEFAULT_CONFIG.copy()
-                    merged.update(loaded)
-                    # Always use platform-specific monitor_region (ignore saved value)
-                    merged["monitor_region"] = MONITOR_REGIONS.get(platform.system())
-                    print(f"Using {platform.system()} monitor region: {merged['monitor_region']}")
+                    merged = self._deep_merge(DEFAULT_CONFIG.copy(), loaded)
+
+                    # Use platform-specific monitor_region only if not set in config
+                    if "monitor_region" not in loaded or loaded["monitor_region"] is None:
+                        merged["monitor_region"] = MONITOR_REGIONS.get(platform.system())
+                        print(f"Using {platform.system()} default monitor region: {merged['monitor_region']}")
+                    else:
+                        print(f"Using config monitor region: {merged['monitor_region']}")
+
                     return merged
             except json.JSONDecodeError:
                 print(f"Warning: Invalid config file, using defaults")
                 return DEFAULT_CONFIG.copy()
         print(f"Using {platform.system()} monitor region: {DEFAULT_CONFIG['monitor_region']}")
         return DEFAULT_CONFIG.copy()
+
+    def _deep_merge(self, base: dict, override: dict) -> dict:
+        """Deep merge two dictionaries, with override taking precedence."""
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
 
     def save(self):
         with open(self.config_path, 'w') as f:

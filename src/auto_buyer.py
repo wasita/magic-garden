@@ -6,6 +6,16 @@ from typing import Optional, Callable, Tuple, List
 from .screen_capture import ScreenCapture
 from .config import Config
 
+# Lazy import for DOM capture (requires playwright)
+_dom_capture_module = None
+
+def get_dom_capture():
+    """Lazy load DOM capture module."""
+    global _dom_capture_module
+    if _dom_capture_module is None:
+        from . import dom_capture as _dom_capture_module
+    return _dom_capture_module
+
 # For active window detection on macOS
 try:
     from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionOnScreenOnly, kCGNullWindowID
@@ -60,6 +70,11 @@ class AutoBuyer:
         self.paused = False
         self._thread: Optional[threading.Thread] = None
 
+        # Detection mode: "ocr" or "dom"
+        self.detection_mode = config.get("detection_mode", "ocr")
+        self.dom = None  # DOM capture instance (lazy loaded)
+        self._dom_connected = False
+
         # Stats
         self.items_detected = 0
         self.items_purchased = 0
@@ -73,6 +88,60 @@ class AutoBuyer:
         self.on_detection: Optional[Callable[[str, Tuple[int, int]], None]] = None
         self.on_purchase: Optional[Callable[[str], None]] = None
         self.on_status_change: Optional[Callable[[str], None]] = None
+
+    def _init_dom(self) -> bool:
+        """Initialize DOM capture if in DOM mode.
+
+        Returns:
+            True if DOM is ready (or not needed), False if DOM mode but failed to connect
+        """
+        if self.detection_mode != "dom":
+            return True
+
+        if self._dom_connected:
+            return True
+
+        try:
+            dom_module = get_dom_capture()
+            cdp_port = self.config.get("discord", {}).get("remote_debugging_port", 9222)
+            game_frame = self.config.get("discord", {}).get("game_frame_selector", "iframe")
+
+            self.dom = dom_module.DOMCapture(cdp_port)
+            if self.dom.connect(game_frame):
+                self._dom_connected = True
+                self._log(f"[DOM] Connected to Discord via CDP on port {cdp_port}")
+                return True
+            else:
+                self._log("[DOM] Failed to connect - falling back to OCR")
+                if self.config.get("fallback", {}).get("use_ocr_if_dom_fails", True):
+                    self.detection_mode = "ocr"
+                    return True
+                return False
+        except ImportError as e:
+            self._log(f"[DOM] Playwright not installed: {e}")
+            self._log("[DOM] Install with: pip install playwright && playwright install chromium")
+            if self.config.get("fallback", {}).get("use_ocr_if_dom_fails", True):
+                self._log("[DOM] Falling back to OCR mode")
+                self.detection_mode = "ocr"
+                return True
+            return False
+        except Exception as e:
+            self._log(f"[DOM] Error initializing: {e}")
+            if self.config.get("fallback", {}).get("use_ocr_if_dom_fails", True):
+                self._log("[DOM] Falling back to OCR mode")
+                self.detection_mode = "ocr"
+                return True
+            return False
+
+    def _cleanup_dom(self):
+        """Disconnect DOM capture."""
+        if self.dom:
+            try:
+                self.dom.disconnect()
+            except Exception:
+                pass
+            self.dom = None
+            self._dom_connected = False
 
     def load_templates(self) -> bool:
         """Load all template images from config."""
@@ -96,12 +165,20 @@ class AutoBuyer:
         self.running = True
         self.paused = False
 
-        # Use monitor_region from config
-        self.game_region = self.config.get("monitor_region")
-        if self.game_region:
-            self._log(f"Using config region: {self.game_region}")
-        else:
-            self._log("No region configured - using full screen")
+        # Initialize DOM if in DOM mode
+        self._log(f"Detection mode: {self.detection_mode}")
+        if not self._init_dom():
+            self._log("Failed to initialize detection - aborting start")
+            self.running = False
+            return
+
+        # Use monitor_region from config (only needed for OCR mode)
+        if self.detection_mode == "ocr":
+            self.game_region = self.config.get("monitor_region")
+            if self.game_region:
+                self._log(f"Using config region: {self.game_region}")
+            else:
+                self._log("No region configured - using full screen")
 
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
@@ -156,6 +233,7 @@ class AutoBuyer:
         if self._thread:
             self._thread.join(timeout=2.0)
             self._thread = None
+        self._cleanup_dom()
         self._log("Auto-buyer stopped")
 
     def toggle_pause(self):
@@ -211,7 +289,12 @@ class AutoBuyer:
         click_delay = self.config.get("click_delay", 0.1)
         shop_mode = self.config.get("shop_mode", "both")  # "seed", "egg", or "both"
 
-        # Use the region captured from user click at startup
+        # Use DOM mode if configured
+        if self.detection_mode == "dom" and self._dom_connected:
+            self._shop_cycle_dom(shop_mode)
+            return
+
+        # OCR mode: Use the region captured from user click at startup
         region = self.game_region
         if region:
             self._log(f"Using region: {region}")
@@ -364,6 +447,157 @@ class AutoBuyer:
             pyautogui.scroll(scroll_amount)
             self._log("Scrolled down")
             time.sleep(0.08 if IS_WINDOWS else 0.15)
+
+    # =========================================================================
+    # DOM-BASED DETECTION METHODS
+    # =========================================================================
+
+    def _shop_cycle_dom(self, shop_mode: str):
+        """Complete one shop cycle using DOM-based detection.
+
+        Args:
+            shop_mode: "seed", "egg", or "both"
+        """
+        self._log("[DOM] === Starting DOM-based shop cycle ===")
+        click_delay = self.config.get("click_delay", 0.2)
+
+        # Get DOM selectors from config
+        dom_selectors = self.config.get("dom_selectors", {})
+        buttons = dom_selectors.get("buttons", {})
+
+        # Step 1: Open seed shop if enabled
+        if shop_mode in ("seed", "both"):
+            seed_shop_btn = buttons.get("open_seed_shop", "")
+            if seed_shop_btn and self.dom.element_exists(seed_shop_btn):
+                self._log("[DOM] Clicking seed shop button")
+                self.dom.click_element(seed_shop_btn)
+                time.sleep(0.5)
+
+            self._log("[DOM] Scanning seed shop...")
+            self._buy_all_items_dom(shop_type="seed")
+
+        # Step 2: Open egg shop if enabled
+        if shop_mode in ("egg", "both"):
+            egg_shop_btn = buttons.get("open_egg_shop", "")
+            if egg_shop_btn and self.dom.element_exists(egg_shop_btn):
+                self._log("[DOM] Clicking egg shop button")
+                self.dom.click_element(egg_shop_btn)
+                time.sleep(0.5)
+
+            self._log("[DOM] Scanning egg shop...")
+            self._buy_all_items_dom(shop_type="egg")
+
+        self._log("[DOM] === Shop cycle complete ===")
+
+    def _buy_all_items_dom(self, shop_type: str):
+        """Buy all available items using DOM detection.
+
+        Args:
+            shop_type: "seed" or "egg"
+        """
+        click_delay = self.config.get("click_delay", 0.2)
+        max_attempts = self.config.get("max_buy_attempts", 20)
+
+        # Get targets from config
+        dom_targets = self.config.get("dom_targets", [])
+        dom_selectors = self.config.get("dom_selectors", {})
+        shop_selectors = dom_selectors.get("shop", {})
+        button_selectors = dom_selectors.get("buttons", {})
+
+        # Filter targets by shop type
+        targets = [t for t in dom_targets if t.get("type") == shop_type and t.get("enabled", True)]
+
+        if not targets:
+            self._log(f"[DOM] No enabled {shop_type} targets configured")
+            return
+
+        self._log(f"[DOM] Looking for {len(targets)} {shop_type} items")
+
+        # Find items with stock
+        items_with_stock = self.dom.find_shop_items_with_stock(
+            targets=targets,
+            item_row_selector=shop_selectors.get("item_row", ".shop-item"),
+            stock_indicator_selector=shop_selectors.get("stock_indicator", ".stock"),
+            no_stock_class=shop_selectors.get("no_stock_class", "out-of-stock"),
+            debug=True
+        )
+
+        if not items_with_stock:
+            self._log(f"[DOM] No {shop_type} items with stock found")
+            return
+
+        self._log(f"[DOM] Found {len(items_with_stock)} items with stock")
+
+        # Buy each item
+        for name, selector, element in items_with_stock:
+            if not self.running or self.paused:
+                return
+
+            self._log(f"[DOM] Buying '{name}'...")
+            self._buy_until_no_stock_dom(name, selector, max_attempts)
+
+    def _buy_until_no_stock_dom(self, name: str, item_selector: str, max_attempts: int = 20):
+        """Keep buying a specific item until no stock using DOM detection.
+
+        Args:
+            name: Display name of the item
+            item_selector: CSS selector for the item
+            max_attempts: Safety limit on purchase attempts
+        """
+        click_delay = self.config.get("click_delay", 0.2)
+        dom_selectors = self.config.get("dom_selectors", {})
+        shop_selectors = dom_selectors.get("shop", {})
+        button_selectors = dom_selectors.get("buttons", {})
+
+        buy_button_selector = button_selectors.get("buy", ".buy-button")
+        no_stock_class = shop_selectors.get("no_stock_class", "out-of-stock")
+
+        # Click item to expand/select it
+        if not self.dom.click_element(item_selector):
+            self._log(f"[DOM] Could not click item '{name}'")
+            return
+
+        self.items_detected += 1
+        self.last_detection_time = time.time()
+        time.sleep(0.3)  # Wait for accordion/expand
+
+        if self.on_detection:
+            self.on_detection(name, (0, 0))
+
+        # Keep clicking buy button until it disappears or item is out of stock
+        for attempt in range(max_attempts):
+            if not self.running or self.paused:
+                return
+
+            # Check if out of stock
+            if self.dom.has_class(item_selector, no_stock_class):
+                self._log(f"[DOM] {name}: out of stock")
+                return
+
+            # Try to find and click buy button
+            # Look for buy button within the item context or globally
+            buy_selector = f"{item_selector} {buy_button_selector}"
+            if not self.dom.element_exists(buy_selector):
+                # Try global buy button
+                buy_selector = buy_button_selector
+
+            if not self.dom.element_exists(buy_selector):
+                self._log(f"[DOM] {name}: no buy button found (sold out or closed)")
+                return
+
+            if self.dom.click_element(buy_selector):
+                self.items_purchased += 1
+                self._log(f"[DOM] Purchased {name}! (attempt {attempt + 1})")
+
+                if self.on_purchase:
+                    self.on_purchase(name)
+
+                time.sleep(click_delay)
+            else:
+                self._log(f"[DOM] {name}: failed to click buy button")
+                return
+
+        self._log(f"[DOM] {name}: reached max attempts ({max_attempts})")
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (OCR version)."""

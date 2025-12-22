@@ -6,8 +6,10 @@ Automatically monitors for and purchases mythical eggs and seeds
 in the Magic Garden game.
 
 Usage:
-    python main.py           - Start with GUI
-    python main.py --headless - Run without GUI (uses config.json settings)
+    python main.py              - Start with GUI
+    python main.py --headless   - Run without GUI (uses config.json settings)
+    python main.py --dom        - Force DOM detection mode
+    python main.py --discover   - Launch DOM selector discovery tool
 """
 
 import sys
@@ -23,7 +25,32 @@ def main():
                         help="Interactive template capture - click on item to capture (e.g., sunflower_seed)")
     parser.add_argument("--set-region", action="store_true",
                         help="Set game region by clicking two corners, saves to config.json")
+    parser.add_argument("--dom", action="store_true",
+                        help="Force DOM detection mode (requires Discord with --remote-debugging-port=9222)")
+    parser.add_argument("--ocr", action="store_true",
+                        help="Force OCR detection mode (default)")
+    parser.add_argument("--discover", action="store_true",
+                        help="Launch interactive DOM selector discovery tool")
+    parser.add_argument("--cdp-port", type=int, default=9222,
+                        help="Chrome DevTools Protocol port (default: 9222)")
     args = parser.parse_args()
+
+    # Handle --discover flag first (doesn't need other setup)
+    if args.discover:
+        print("=== DOM Selector Discovery Tool ===")
+        print(f"Connecting to Discord on CDP port {args.cdp_port}...")
+        print()
+        print("Make sure Discord is running with:")
+        print(f"  discord --remote-debugging-port={args.cdp_port}")
+        print()
+        try:
+            from src.dom_capture import discover_selectors
+            discover_selectors(args.cdp_port)
+        except ImportError as e:
+            print(f"Error: {e}")
+            print("Install playwright with: pip install playwright && playwright install chromium")
+            sys.exit(1)
+        return
 
     if args.set_region:
         # Set game region interactively
@@ -124,6 +151,16 @@ def main():
         import signal
 
         config = Config()
+
+        # Override detection mode from CLI flags
+        if args.dom:
+            config.set("detection_mode", "dom")
+            config.set("discord", {"remote_debugging_port": args.cdp_port, "game_frame_selector": "iframe"})
+            print(f"Using DOM detection mode (CDP port: {args.cdp_port})")
+        elif args.ocr:
+            config.set("detection_mode", "ocr")
+            print("Using OCR detection mode")
+
         buyer = AutoBuyer(config)
 
         def signal_handler(sig, frame):
@@ -133,14 +170,13 @@ def main():
 
         signal.signal(signal.SIGINT, signal_handler)
 
-        if not buyer.load_templates():
-            print("Error: Could not load templates. Create them first with:")
-            print("  python main.py --capture mythical_egg")
-            print("  python main.py --capture mythical_seed")
-            print("  python main.py --capture buy_button")
-            sys.exit(1)
+        # Only load templates if using OCR mode
+        if config.get("detection_mode", "ocr") == "ocr":
+            if not buyer.load_templates():
+                print("Warning: Could not load some templates. OCR mode may still work.")
 
-        print("Starting auto-buyer in headless mode...")
+        detection_mode = config.get("detection_mode", "ocr")
+        print(f"Starting auto-buyer in headless mode (detection: {detection_mode})...")
         print("Press Ctrl+C to stop")
         buyer.start()
 
