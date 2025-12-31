@@ -3,10 +3,10 @@
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
     "monitor_region": [
-        761,
-        471,
-        881,
-        779
+        799,
+        479,
+        882,
+        766
     ],
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
@@ -17,6 +17,7 @@
         "moonbinder_pod": "templates/moonbinder_pod.png",
         "starweaver_pod": "templates/starweaver_pod.png",
         "buy_button": "templates/buy_button.png",
+        "green_buy_button": "templates/green_buy_button.png",
         "open_seed_shop": "templates/open_seed_shop.png",
         "open_egg_shop": "templates/open_egg_shop.png"
     },

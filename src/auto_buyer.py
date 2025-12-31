@@ -312,7 +312,8 @@ class AutoBuyer:
         # Use OCR targets from config
         ocr_targets = self.config.get("ocr_targets", [])
         if shop_type == "seed":
-            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t or "Bean" in t]
+            # Include Seed, Pod, Bean, and also Pinecone (no suffix)
+            targets = [t for t in ocr_targets if "Seed" in t or "Pod" in t or "Bean" in t or "Pinecone" in t]
         else:  # egg
             targets = [t for t in ocr_targets if "Egg" in t]
 
@@ -326,24 +327,36 @@ class AutoBuyer:
 
             self._log(f"Scanning shop page {page + 1}")
 
-            # Scan current page for items
-            screen = self.screen.capture_screen(region)
+            # Keep scanning this page until no more items with stock are found
+            # This handles layout shifts after buying items
+            items_bought_on_page = True
+            while items_bought_on_page:
+                items_bought_on_page = False
 
-            # Find items with STOCK on the same line (single OCR pass - fast!)
-            shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
-
-            if shop_items:
-                self._log(f"Found {len(shop_items)} items on page {page + 1}")
-
-            for target, rel_x, rel_y in shop_items:
-                if not self.running or self.paused:
-                    return
-
-                self._log(f"Buying '{target}' at ({rel_x},{rel_y})")
-                # Pass position directly - don't re-search with OCR
-                self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
-                # Re-capture screen after buying in case layout changed
+                # Scan current page for items (re-scan each loop to get fresh positions)
                 screen = self.screen.capture_screen(region)
+
+                # Find items with STOCK on the same line (single OCR pass - fast!)
+                shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
+
+                if shop_items:
+                    self._log(f"Found {len(shop_items)} items on page {page + 1}")
+
+                    # Only buy the FIRST item found, then re-scan to get fresh positions
+                    target, rel_x, rel_y = shop_items[0]
+
+                    if not self.running or self.paused:
+                        return
+
+                    self._log(f"Buying '{target}' at ({rel_x},{rel_y})")
+                    self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
+                    items_bought_on_page = True  # Will re-scan the page
+
+                    # Small delay to let UI settle after purchase
+                    time.sleep(0.3)
+
+            # After buying all items on this page, capture screen for end marker check
+            screen = self.screen.capture_screen(region)
 
             # Scroll down to see more items (use mouse scroll, not arrow keys)
             if region:
@@ -464,70 +477,77 @@ class AutoBuyer:
         pyautogui.click(abs_x, abs_y)
         self.items_detected += 1
         self.last_detection_time = time.time()
-        time.sleep(0.5)  # Wait for accordion to open
+        time.sleep(0.7)  # Wait for accordion to open (increased from 0.5)
 
         if self.on_detection:
             self.on_detection(target, (abs_x, abs_y))
 
-        # Now keep clicking the buy button until it disappears (sold out)
+        # Now keep clicking the buy button until it's greyed out (sold out)
+        bought_count = 0
         for attempt in range(max_attempts):
             if not self.running or self.paused:
                 return
 
             screen = self.screen.capture_screen(region)
 
-            # Find green buy buttons by color detection (fast!)
-            green_buttons = self.screen.find_green_buttons(screen, debug=False)
+            # Find green buy buttons by color detection
+            # When button turns grey (sold out), this won't find it
+            green_buttons = self.screen.find_green_buttons(screen, debug=(attempt == 0))
+
+            buy_rel_x, buy_rel_y = None, None
 
             if green_buttons:
-                # Filter: button should be BELOW the item and roughly same X (directly below)
-                # Scale thresholds based on region size (Mac baseline: 534 height)
-                scale = region[3] / 534 if region else 1.0
-                min_y_dist = int(30 * scale)   # Skip elements on same row (like cactus icon)
-                max_y_dist = int(200 * scale)  # How far below item to look
-                max_x_dist = int(100 * scale)  # Button should be roughly below item, not far left/right
-
-                self._log(f"Item at ({rel_x},{rel_y}), looking for button within y:[{rel_y + min_y_dist}..{rel_y + max_y_dist}], x:[{rel_x - max_x_dist}..{rel_x + max_x_dist}]")
-                self._log(f"All green buttons found: {green_buttons}")
-
-                # Filter: buttons below item AND roughly same horizontal position
-                valid_buttons = [(x, y) for x, y in green_buttons
-                                if y > rel_y + min_y_dist and y < rel_y + max_y_dist
-                                and abs(x - rel_x) < max_x_dist]
-
-                self._log(f"Valid buttons after Y filter: {valid_buttons} (scale={scale:.2f})")
-
-                if valid_buttons:
-                    # Pick the button furthest below in dropdown (largest Y = bottom of dropdown where buy button is)
-                    best_button = max(valid_buttons, key=lambda b: b[1])
-                    buy_rel_x, buy_rel_y = best_button
-                    self._log(f"Selected button at ({buy_rel_x},{buy_rel_y}) - y_dist={buy_rel_y - rel_y}, x_dist={abs(buy_rel_x - rel_x)}")
-
-                    if region:
-                        buy_abs_x = buy_rel_x + region[0]
-                        buy_abs_y = buy_rel_y + region[1]
-                    else:
-                        buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
-
-                    self._log(f"Clicking buy button at ({buy_abs_x},{buy_abs_y})")
-                    pyautogui.click(buy_abs_x, buy_abs_y)
-                    self.items_purchased += 1
-                    self._log(f"Purchased {target}! (attempt {attempt + 1})")
-
-                    if self.on_purchase:
-                        self.on_purchase(target)
-
-                    time.sleep(click_delay + 0.1)  # Small delay between purchases
+                self._log(f"Found {len(green_buttons)} green button(s): {green_buttons}")
+                # If multiple buttons found, log them all for debugging
+                if len(green_buttons) > 1:
+                    self._log(f"WARNING: Multiple green buttons - picking leftmost to avoid 'buy with donut'")
+                    # Pick the leftmost button (lowest X) - the regular buy button is usually on the left
+                    buy_rel_x, buy_rel_y = min(green_buttons, key=lambda b: b[0])
                 else:
-                    # No valid green button near the item - might be sold out
-                    self._log(f"{target}: No buy button found (sold out or closed)")
-                    return
+                    buy_rel_x, buy_rel_y = green_buttons[0]
+
+            # Only use template fallback on FIRST attempt (before any purchase)
+            # After that, rely on color detection - if button is grey, we're done
+            if buy_rel_x is None and bought_count == 0:
+                self._log("Color detection failed, trying template matching...")
+                for template_name in ["green_buy_button", "buy_button"]:
+                    buy_match = self.screen.find_template(screen, template_name)
+                    if buy_match:
+                        tmpl_x, tmpl_y, conf = buy_match
+                        # Only accept high confidence matches (>0.85) to avoid false positives
+                        # Button should be roughly below the item - within 150px horizontally, and below in Y
+                        x_offset = abs(tmpl_x - rel_x)
+                        y_below = tmpl_y - rel_y  # positive means button is below item
+                        if conf >= 0.85 and x_offset < 150 and y_below > 0:
+                            buy_rel_x, buy_rel_y = tmpl_x, tmpl_y
+                            self._log(f"Template '{template_name}' matched at ({buy_rel_x},{buy_rel_y}) conf={conf:.2f}")
+                            break
+                        else:
+                            self._log(f"Template '{template_name}' rejected: conf={conf:.2f}, x_offset={x_offset}, y_below={y_below} (need conf>=0.85, x_offset<150, y_below>0)")
+
+            if buy_rel_x is not None:
+                if region:
+                    buy_abs_x = buy_rel_x + region[0]
+                    buy_abs_y = buy_rel_y + region[1]
+                else:
+                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+
+                self._log(f"Clicking: relative=({buy_rel_x},{buy_rel_y}) + region=({region[0] if region else 0},{region[1] if region else 0}) = absolute=({buy_abs_x},{buy_abs_y})")
+                pyautogui.click(buy_abs_x, buy_abs_y)
+                bought_count += 1
+                self.items_purchased += 1
+                self._log(f"Purchased {target}! (x{bought_count})")
+
+                if self.on_purchase:
+                    self.on_purchase(target)
+
+                time.sleep(click_delay + 0.1)
             else:
-                # No green buttons at all - sold out
-                self._log(f"{target}: No green buttons - sold out")
+                # No green button found - button is greyed out, sold out
+                self._log(f"{target}: Sold out after buying {bought_count}")
                 return
 
-        self._log(f"{target}: Reached max attempts ({max_attempts})")
+        self._log(f"{target}: Reached max attempts ({max_attempts}), bought {bought_count}")
 
     def _buy_until_no_stock_template(self, template_name: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (template matching version)."""

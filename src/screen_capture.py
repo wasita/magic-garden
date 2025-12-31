@@ -427,13 +427,19 @@ class ScreenCapture:
         # Convert to HSV for better color detection
         hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
 
-        # The buy button green (extracted from template: H=53, S=153, V=172)
-        # Use a range around these values
-        lower_green = np.array([43, 100, 120])  # Widened range for PC
-        upper_green = np.array([75, 255, 255])
+        # Try multiple green ranges to catch different shades
+        # Range 1: Yellow-green to green (original range, widened)
+        lower_green1 = np.array([35, 50, 80])
+        upper_green1 = np.array([85, 255, 255])
 
-        # Create mask for green pixels
-        mask = cv2.inRange(hsv, lower_green, upper_green)
+        # Range 2: Brighter/more saturated greens
+        lower_green2 = np.array([40, 100, 100])
+        upper_green2 = np.array([80, 255, 255])
+
+        # Create masks and combine them
+        mask1 = cv2.inRange(hsv, lower_green1, upper_green1)
+        mask2 = cv2.inRange(hsv, lower_green2, upper_green2)
+        mask = cv2.bitwise_or(mask1, mask2)
 
         # Find contours (connected green regions)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -441,11 +447,25 @@ class ScreenCapture:
         # Scale area thresholds based on screen size (Mac baseline: 645x534)
         screen_h, screen_w = screen.shape[:2]
         scale = (screen_w * screen_h) / (645 * 534)
-        min_area = int(500 * scale)
-        max_area = int(10000 * scale)
+        min_area = int(200 * scale)   # Lowered from 500
+        max_area = int(20000 * scale)  # Increased from 10000
 
         if debug:
             print(f"[DEBUG] Screen {screen_w}x{screen_h}, scale={scale:.2f}, area range={min_area}-{max_area}")
+            # Save debug images to project directory
+            try:
+                import os
+                debug_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                mask_path = os.path.join(debug_dir, "debug_green_mask.png")
+                screen_path = os.path.join(debug_dir, "debug_screenshot.png")
+                cv2.imwrite(mask_path, mask)
+                cv2.imwrite(screen_path, screen)
+                print(f"[DEBUG] Saved debug images to {debug_dir}")
+            except Exception as e:
+                print(f"[DEBUG] Failed to save debug images: {e}")
+
+        # For annotated debug image
+        annotated = screen.copy() if debug else None
 
         buttons = []
         for contour in contours:
@@ -453,21 +473,40 @@ class ScreenCapture:
             # Filter by size - scaled for screen resolution
             if area > min_area and area < max_area:
                 x, y, w, h = cv2.boundingRect(contour)
-                # Buy button should be wider than tall (rectangular, not labels like "uncommon")
-                # Require width > height (true button shape)
-                if w > h * 1.2:
+                # Buy button must be WIDE rectangle (width > height * 1.8)
+                # This filters out square-ish seed icons (cactus, bamboo, etc.)
+                aspect_ratio = w / h if h > 0 else 0
+                min_width = int(40 * (screen_w / 645))  # Minimum width scaled
+
+                if aspect_ratio > 1.8 and aspect_ratio < 6.0 and w > min_width:
                     center_x = x + w // 2
                     center_y = y + h // 2
                     buttons.append((center_x, center_y, area))
                     if debug:
-                        print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area} ratio={w/h:.2f}")
+                        print(f"[DEBUG] Green BUY BUTTON at ({center_x},{center_y}) size={w}x{h} area={area} ratio={aspect_ratio:.2f}")
+                        # Draw rectangle and center point on annotated image
+                        cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        cv2.circle(annotated, (center_x, center_y), 5, (0, 0, 255), -1)
+                        cv2.putText(annotated, f"BTN ({center_x},{center_y})", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 elif debug:
-                    print(f"[DEBUG] Rejected shape: size={w}x{h} ratio={w/h:.2f} (need w > h*1.2)")
-            elif debug and area > 100:
+                    print(f"[DEBUG] Rejected (seed icon?): size={w}x{h} ratio={aspect_ratio:.2f} (need ratio>1.8, w>{min_width})")
+            elif debug and area > 50:
                 print(f"[DEBUG] Rejected contour: area={area} (need {min_area}-{max_area})")
 
         # Sort by area (largest first) and return centers only
         buttons.sort(key=lambda b: b[2], reverse=True)
+
+        # Save annotated image showing detected buttons
+        if debug and annotated is not None:
+            try:
+                import os
+                debug_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                annotated_path = os.path.join(debug_dir, "debug_buttons_annotated.png")
+                cv2.imwrite(annotated_path, annotated)
+                print(f"[DEBUG] Saved annotated image to {annotated_path}")
+            except Exception as e:
+                print(f"[DEBUG] Failed to save annotated image: {e}")
+
         return [(x, y) for x, y, _ in buttons]
 
     def find_close_button(self, screen: np.ndarray, debug: bool = False) -> Optional[Tuple[int, int]]:
