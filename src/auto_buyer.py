@@ -369,7 +369,15 @@ class AutoBuyer:
                 self._log("WARNING: No region set, cannot center mouse for scroll")
             # Check if we've reached the end of the shop (end marker visible)
             if self.screen.text_exists(screen, end_marker):
-                self._log(f"Reached end of shop (found '{end_marker}')")
+                self._log(f"Found '{end_marker}' - doing one more scan to make sure we don't miss it")
+                # Do one more scan specifically for the end marker item in case it has stock
+                screen = self.screen.capture_screen(region)
+                shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
+                for target, rel_x, rel_y in shop_items:
+                    if end_marker.lower() in target.lower():
+                        self._log(f"Found {target} with stock! Buying before ending...")
+                        self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
+                self._log(f"Reached end of shop")
                 break
 
             # Windows scroll is more granular, need larger value
