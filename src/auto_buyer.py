@@ -477,77 +477,102 @@ class AutoBuyer:
         pyautogui.click(abs_x, abs_y)
         self.items_detected += 1
         self.last_detection_time = time.time()
-        time.sleep(0.7)  # Wait for accordion to open (increased from 0.5)
 
         if self.on_detection:
             self.on_detection(target, (abs_x, abs_y))
 
-        # Now keep clicking the buy button until it's greyed out (sold out)
+        # Wait for accordion to fully open before capturing screenshot
+        self._log("Waiting for accordion to open...")
+        time.sleep(1.0)
+
+        # NOW capture screenshot with accordion open
+        self._log("Capturing screenshot for buy button detection...")
+        screen = self.screen.capture_screen(region)
+        green_buttons = self.screen.find_green_buttons(screen, debug=True)
+
+        buy_rel_x, buy_rel_y = None, None
+
+        if green_buttons:
+            self._log(f"Found {len(green_buttons)} green button(s): {green_buttons}")
+            if len(green_buttons) > 1:
+                self._log(f"Picking leftmost to avoid 'buy with donut'")
+                buy_rel_x, buy_rel_y = min(green_buttons, key=lambda b: b[0])
+            else:
+                buy_rel_x, buy_rel_y = green_buttons[0]
+
+        # Fallback to template matching if color detection failed
+        if buy_rel_x is None:
+            self._log("Color detection failed, trying template matching...")
+            for template_name in ["green_buy_button", "buy_button"]:
+                buy_match = self.screen.find_template(screen, template_name)
+                if buy_match:
+                    tmpl_x, tmpl_y, conf = buy_match
+                    x_offset = abs(tmpl_x - rel_x)
+                    y_below = tmpl_y - rel_y
+                    # Allow wider horizontal offset (400px) for different shop layouts
+                    if conf >= 0.85 and x_offset < 400 and y_below > 0:
+                        buy_rel_x, buy_rel_y = tmpl_x, tmpl_y
+                        self._log(f"Template '{template_name}' matched at ({buy_rel_x},{buy_rel_y}) conf={conf:.2f}")
+                        break
+                    else:
+                        self._log(f"Template '{template_name}' rejected: conf={conf:.2f}, x_offset={x_offset}, y_below={y_below} (need conf>=0.85, x<400, y>0)")
+
+        if buy_rel_x is None:
+            self._log(f"{target}: No buy button found")
+            return
+
+        # Calculate absolute position once
+        if region:
+            buy_abs_x = buy_rel_x + region[0]
+            buy_abs_y = buy_rel_y + region[1]
+        else:
+            buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
+
+        self._log(f"Buy button at ({buy_abs_x},{buy_abs_y}) - clicking until grey")
+
+        # Move cursor to buy button once, then keep clicking until it turns grey
+        pyautogui.moveTo(buy_abs_x, buy_abs_y)
         bought_count = 0
-        for attempt in range(max_attempts):
+
+        # Keep clicking until the button is no longer green (grey = sold out)
+        while True:
             if not self.running or self.paused:
                 return
 
+            # Click at current cursor position
+            pyautogui.click()
+            bought_count += 1
+            self.items_purchased += 1
+
+            if self.on_purchase:
+                self.on_purchase(target)
+
+            time.sleep(click_delay)
+
+            # Check if button is still green
             screen = self.screen.capture_screen(region)
-
-            # Find green buy buttons by color detection
-            # When button turns grey (sold out), this won't find it
-            green_buttons = self.screen.find_green_buttons(screen, debug=(attempt == 0))
-
-            buy_rel_x, buy_rel_y = None, None
+            # Enable debug every 10 clicks to see what's being detected
+            debug_this_check = (bought_count % 10 == 0)
+            green_buttons = self.screen.find_green_buttons(screen, debug=debug_this_check)
 
             if green_buttons:
-                self._log(f"Found {len(green_buttons)} green button(s): {green_buttons}")
-                # If multiple buttons found, log them all for debugging
-                if len(green_buttons) > 1:
-                    self._log(f"WARNING: Multiple green buttons - picking leftmost to avoid 'buy with donut'")
-                    # Pick the leftmost button (lowest X) - the regular buy button is usually on the left
-                    buy_rel_x, buy_rel_y = min(green_buttons, key=lambda b: b[0])
-                else:
-                    buy_rel_x, buy_rel_y = green_buttons[0]
-
-            # Only use template fallback on FIRST attempt (before any purchase)
-            # After that, rely on color detection - if button is grey, we're done
-            if buy_rel_x is None and bought_count == 0:
-                self._log("Color detection failed, trying template matching...")
-                for template_name in ["green_buy_button", "buy_button"]:
-                    buy_match = self.screen.find_template(screen, template_name)
-                    if buy_match:
-                        tmpl_x, tmpl_y, conf = buy_match
-                        # Only accept high confidence matches (>0.85) to avoid false positives
-                        # Button should be roughly below the item - within 150px horizontally, and below in Y
-                        x_offset = abs(tmpl_x - rel_x)
-                        y_below = tmpl_y - rel_y  # positive means button is below item
-                        if conf >= 0.85 and x_offset < 150 and y_below > 0:
-                            buy_rel_x, buy_rel_y = tmpl_x, tmpl_y
-                            self._log(f"Template '{template_name}' matched at ({buy_rel_x},{buy_rel_y}) conf={conf:.2f}")
-                            break
-                        else:
-                            self._log(f"Template '{template_name}' rejected: conf={conf:.2f}, x_offset={x_offset}, y_below={y_below} (need conf>=0.85, x_offset<150, y_below>0)")
-
-            if buy_rel_x is not None:
-                if region:
-                    buy_abs_x = buy_rel_x + region[0]
-                    buy_abs_y = buy_rel_y + region[1]
-                else:
-                    buy_abs_x, buy_abs_y = buy_rel_x, buy_rel_y
-
-                self._log(f"Clicking: relative=({buy_rel_x},{buy_rel_y}) + region=({region[0] if region else 0},{region[1] if region else 0}) = absolute=({buy_abs_x},{buy_abs_y})")
-                pyautogui.click(buy_abs_x, buy_abs_y)
-                bought_count += 1
-                self.items_purchased += 1
-                self._log(f"Purchased {target}! (x{bought_count})")
-
-                if self.on_purchase:
-                    self.on_purchase(target)
-
-                time.sleep(click_delay + 0.1)
+                # Verify the detected button is near where we're clicking
+                # If the "green button" is far from our click position, it's probably something else
+                closest_dist = min(((bx - buy_rel_x)**2 + (by - buy_rel_y)**2)**0.5 for bx, by in green_buttons)
+                if closest_dist > 100:
+                    self._log(f"Warning: Detected green at {green_buttons} but far from buy button ({buy_rel_x},{buy_rel_y}), dist={closest_dist:.0f}")
+                    # Treat as sold out - the actual button is probably grey
+                    self._log(f"Purchased {target}! (x{bought_count}) - sold out")
+                    return
             else:
-                # No green button found - button is greyed out, sold out
-                self._log(f"{target}: Sold out after buying {bought_count}")
-                return
+                # Button not found - quick retry in case of animation
+                time.sleep(0.1)
+                screen = self.screen.capture_screen(region)
+                green_buttons = self.screen.find_green_buttons(screen, debug=False)
 
-        self._log(f"{target}: Reached max attempts ({max_attempts}), bought {bought_count}")
+                if not green_buttons:
+                    self._log(f"Purchased {target}! (x{bought_count}) - sold out")
+                    return
 
     def _buy_until_no_stock_template(self, template_name: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (template matching version)."""

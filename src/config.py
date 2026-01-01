@@ -39,14 +39,17 @@ class Config:
                     loaded = json.load(f)
                     merged = DEFAULT_CONFIG.copy()
                     merged.update(loaded)
-                    # Always use platform-specific monitor_region (ignore saved value)
-                    merged["monitor_region"] = MONITOR_REGIONS.get(platform.system())
-                    print(f"Using {platform.system()} monitor region: {merged['monitor_region']}")
+                    # Use config.json region if set, otherwise use platform default
+                    if "monitor_region" in loaded and loaded["monitor_region"]:
+                        print(f"Using config.json monitor region: {merged['monitor_region']}")
+                    else:
+                        merged["monitor_region"] = MONITOR_REGIONS.get(platform.system())
+                        print(f"Using {platform.system()} default monitor region: {merged['monitor_region']}")
                     return merged
             except json.JSONDecodeError:
                 print(f"Warning: Invalid config file, using defaults")
                 return DEFAULT_CONFIG.copy()
-        print(f"Using {platform.system()} monitor region: {DEFAULT_CONFIG['monitor_region']}")
+        print(f"Using {platform.system()} default monitor region: {DEFAULT_CONFIG['monitor_region']}")
         return DEFAULT_CONFIG.copy()
 
     def save(self):

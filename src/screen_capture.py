@@ -476,9 +476,9 @@ class ScreenCapture:
                 # Buy button must be WIDE rectangle (width > height * 1.8)
                 # This filters out square-ish seed icons (cactus, bamboo, etc.)
                 aspect_ratio = w / h if h > 0 else 0
-                min_width = int(40 * (screen_w / 645))  # Minimum width scaled
+                min_width = int(25 * (screen_w / 645))  # Minimum width scaled (lowered)
 
-                if aspect_ratio > 1.8 and aspect_ratio < 6.0 and w > min_width:
+                if aspect_ratio > 1.3 and aspect_ratio < 8.0 and w > min_width:
                     center_x = x + w // 2
                     center_y = y + h // 2
                     buttons.append((center_x, center_y, area))
