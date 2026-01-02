@@ -452,14 +452,12 @@ class ScreenCapture:
 
         if debug:
             print(f"[DEBUG] Screen {screen_w}x{screen_h}, scale={scale:.2f}, area range={min_area}-{max_area}")
-            # Save debug images to project directory
+            # Save debug images to debug folder
             try:
-                import os
-                debug_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                mask_path = os.path.join(debug_dir, "debug_green_mask.png")
-                screen_path = os.path.join(debug_dir, "debug_screenshot.png")
-                cv2.imwrite(mask_path, mask)
-                cv2.imwrite(screen_path, screen)
+                debug_dir = Path(__file__).parent.parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                cv2.imwrite(str(debug_dir / "green_mask.png"), mask)
+                cv2.imwrite(str(debug_dir / "screenshot.png"), screen)
                 print(f"[DEBUG] Saved debug images to {debug_dir}")
             except Exception as e:
                 print(f"[DEBUG] Failed to save debug images: {e}")
@@ -499,10 +497,10 @@ class ScreenCapture:
         # Save annotated image showing detected buttons
         if debug and annotated is not None:
             try:
-                import os
-                debug_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                annotated_path = os.path.join(debug_dir, "debug_buttons_annotated.png")
-                cv2.imwrite(annotated_path, annotated)
+                debug_dir = Path(__file__).parent.parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                annotated_path = debug_dir / "buttons_annotated.png"
+                cv2.imwrite(str(annotated_path), annotated)
                 print(f"[DEBUG] Saved annotated image to {annotated_path}")
             except Exception as e:
                 print(f"[DEBUG] Failed to save annotated image: {e}")
