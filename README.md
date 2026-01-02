@@ -21,6 +21,7 @@ Automatically monitors and purchases seeds and eggs in the Magic Garden Discord 
 - [uv](https://docs.astral.sh/uv/) (recommended) or Python 3.10+
 - Magic Garden game (Discord activity)
 - **Windows only:** Tesseract OCR (see below)
+- **Windows only:** pydirectinput (for game input - installed automatically)
 
 ### macOS Installation
 
@@ -100,30 +101,29 @@ Edit `config.json`:
     "click_delay": 0.3,
     "confidence_threshold": 0.6,
     "shop_mode": "seed",
-    "monitor_region": [271, 87, 645, 534],
+    "monitor_region": [799, 479, 882, 766],
     "ocr_targets": [
         "Mythical Egg",
-        "Sunflower Seed",
         "Bamboo Seed",
-        "Cactus Seed",
-        "Carrot Seed",
+        "Sunflower Seed",
+        "Starweaver Pod",
         "Dawnbinder Pod",
-        "Moonbinder Pod",
-        "Starweaver Pod"
+        "Moonbinder Pod"
     ],
-    "max_buy_attempts": 20
+    "use_ocr": true,
+    "startup_delay": 3
 }
 ```
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `scan_interval` | Seconds between shop cycles | 1.0 |
-| `click_delay` | Delay after clicking (seconds) | 0.3 |
+| `click_delay` | Delay after each buy click (seconds) | 0.3 |
 | `confidence_threshold` | Template match sensitivity (0-1) | 0.6 |
 | `shop_mode` | Which shops to scan: `"seed"`, `"egg"`, or `"both"` | `"seed"` |
 | `monitor_region` | Game window region `[x, y, width, height]` | - |
 | `ocr_targets` | List of item names to buy | - |
-| `max_buy_attempts` | Max clicks per item before moving on | 20 |
+| `use_ocr` | Use OCR text detection (recommended) | true |
 | `startup_delay` | Seconds to wait before starting (focus game) | 3 |
 
 ## Usage
@@ -193,25 +193,41 @@ The executable will be in the `dist/` folder.
 
 ## How It Works
 
-1. **Screen Capture** - Captures the game region defined in config
-2. **OCR Detection** - Uses pytesseract to read text on screen
-3. **Stock Filter** - Only considers items with "STOCK" text nearby
-4. **Fuzzy Matching** - Matches partial text (e.g., "arrot" → "Carrot Seed")
-5. **Click Item** - Clicks on the item to open the buy accordion
-6. **Color Detection** - Finds green buy buttons using HSV color matching
-7. **Buy Loop** - Keeps clicking buy until button disappears (sold out)
-8. **Scroll & Repeat** - Scrolls down, continues scanning, loops forever
+1. **Shop Navigation** - Teleports to shop (Shift+1), opens seed/egg shop (Space)
+2. **Screen Capture** - Captures the game region defined in config
+3. **OCR Detection** - Uses pytesseract to read text on screen
+4. **Stock Filter** - Only considers items with "STOCK" text on the same line
+5. **Fuzzy Matching** - Matches partial text to handle OCR errors (e.g., "amboo" → "Bamboo")
+6. **Click Item** - Clicks on the item to open the buy accordion
+7. **Green Button Detection** - Finds buy buttons using HSV color matching
+8. **Buy Loop** - Clicks buy button repeatedly until it turns grey (sold out)
+9. **Re-scan Page** - After buying, re-scans the page for remaining items (handles layout shifts)
+10. **Scroll & Repeat** - Scrolls down, continues scanning until end of shop, then loops
+
+## Debugging
+
+When debug mode is enabled, the bot saves diagnostic images to the `debug/` folder:
+- `debug/screenshot.png` - Current screen capture
+- `debug/green_mask.png` - HSV color mask showing detected green regions
+- `debug/buttons_annotated.png` - Screenshot with detected buttons highlighted
+
+These help diagnose issues with button detection or region setup.
 
 ## Troubleshooting
 
 **Bot not detecting items:**
 - Run `--set-region` to recapture game window bounds
 - Check that `ocr_targets` in config.json matches exact item names
-- Try running with debug output (first page shows OCR results)
+- Check debug output for OCR results and matched text
+
+**Green buy button not detected:**
+- Check `debug/green_mask.png` to see what green regions are detected
+- The button must be wide (aspect ratio > 1.3) to avoid matching seed icons
+- Ensure the game region covers the buy button area
 
 **Clicking wrong things:**
-- The bot filters for items with "STOCK" nearby - popups shouldn't trigger
-- If false positives persist, check the debug output for what's being matched
+- The bot filters for items with "STOCK" on the same line - popups shouldn't trigger
+- If false positives persist, check the debug output for what text is being matched
 
 **Tesseract not found (Windows):**
 - Ensure Tesseract is installed and in PATH
@@ -222,8 +238,9 @@ The executable will be in the `dist/` folder.
 - Add Terminal (or your IDE) to the allowed apps
 
 **Bot clicking but not buying:**
-- Increase `click_delay` in config.json
-- Check that the game window is focused and not obstructed
+- Check `debug/buttons_annotated.png` to see if button is detected
+- Increase `click_delay` in config.json if clicks are too fast
+- Ensure the game window is focused and not obstructed
 
 ## Disclaimer
 
