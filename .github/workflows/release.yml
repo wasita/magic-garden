@@ -38,8 +38,71 @@ jobs:
           name: MagicGardenBot-Windows
           path: dist/MagicGardenBot.exe
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Tesseract
+        run: brew install tesseract
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv add pyinstaller
+
+      - name: Build executable
+        run: uv run pyinstaller magic-garden.spec
+
+      - name: Zip app bundle
+        run: cd dist && zip -r MagicGardenBot-macOS.zip MagicGardenBot.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MagicGardenBot-macOS
+          path: dist/MagicGardenBot-macOS.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Tesseract
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv add pyinstaller
+
+      - name: Build executable
+        run: uv run pyinstaller magic-garden.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MagicGardenBot-Linux
+          path: dist/MagicGardenBot
+
   release:
-    needs: build-windows
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,8 +112,24 @@ jobs:
         with:
           name: MagicGardenBot-Windows
 
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: MagicGardenBot-macOS
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: MagicGardenBot-Linux
+
+      - name: Rename Linux binary
+        run: mv MagicGardenBot MagicGardenBot-Linux
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: MagicGardenBot.exe
+          files: |
+            MagicGardenBot.exe
+            MagicGardenBot-macOS.zip
+            MagicGardenBot-Linux
           generate_release_notes: true
