@@ -26,9 +26,30 @@ hidden_imports = (
     ['PIL', 'PIL.Image', 'numpy', 'pytesseract', 'pydirectinput']
 )
 
-# pydirectinput is Windows-only
+# Platform-specific binaries
+binaries = []
+datas = [
+    ('config.json', '.'),
+    ('templates', 'templates'),
+    ('src', 'src'),
+] + easyocr_datas
+
+# Bundle Tesseract on Windows
 if sys.platform == 'win32':
-    hidden_imports.append('pydirectinput')
+    tesseract_path = r'C:\Program Files\Tesseract-OCR'
+    if os.path.exists(tesseract_path):
+        # Add Tesseract executable and DLLs
+        for f in os.listdir(tesseract_path):
+            full_path = os.path.join(tesseract_path, f)
+            if os.path.isfile(full_path):
+                binaries.append((full_path, 'tesseract'))
+        # Add tessdata (language models)
+        tessdata_path = os.path.join(tesseract_path, 'tessdata')
+        if os.path.exists(tessdata_path):
+            datas.append((tessdata_path, 'tesseract/tessdata'))
+    else:
+        print(f"WARNING: Tesseract not found at {tesseract_path}")
+        print("The built executable will require Tesseract to be installed separately.")
 
 a = Analysis(
     ['main.py'],
