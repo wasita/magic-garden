@@ -159,9 +159,6 @@ Controls:
 ```bash
 # Set game region interactively
 uv run python main.py --set-region
-
-# Capture a template image (click on item)
-uv run python main.py --capture-template sunflower_seed
 ```
 
 ## Building Standalone Executable

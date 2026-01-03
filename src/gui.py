@@ -56,8 +56,6 @@ class BotGUI:
         self.stop_btn = ttk.Button(button_frame, text="Stop (F7)", command=self._stop_bot)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        ttk.Button(button_frame, text="Capture Template", command=self._capture_template).pack(side=tk.LEFT, padx=(0, 5))
-
         ttk.Button(button_frame, text="Set Region", command=self._set_region).pack(side=tk.LEFT)
 
         # Stats section
@@ -167,41 +165,6 @@ class BotGUI:
             self._log("Region saved to config.json!")
 
         threading.Thread(target=capture_region, daemon=True).start()
-
-    def _capture_template(self):
-        """Capture a template screenshot."""
-        templates = ["mythical_egg", "mythical_seed", "buy_button"]
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Capture Template")
-        dialog.geometry("300x200")
-        dialog.transient(self.root)
-
-        ttk.Label(dialog, text="Select template to capture:").pack(pady=10)
-
-        selected = tk.StringVar(value=templates[0])
-        for template in templates:
-            ttk.Radiobutton(dialog, text=template, value=template, variable=selected).pack(anchor=tk.W, padx=20)
-
-        def capture():
-            template_name = selected.get()
-            dialog.destroy()
-            self._log(f"Move to {template_name} and press Enter...")
-
-            # Wait for user to position
-            def do_capture():
-                import time
-                time.sleep(3)  # Give user time to position
-                from .screen_capture import ScreenCapture
-
-                path = f"templates/{template_name}.png"
-                ScreenCapture.save_screenshot(path)
-                self._log(f"Saved template to {path}")
-                self.buyer.screen.load_template(template_name, path)
-
-            threading.Thread(target=do_capture, daemon=True).start()
-
-        ttk.Button(dialog, text="Capture (3s delay)", command=capture).pack(pady=20)
 
     def _on_log_message(self, message: str):
         """Handle log message callback."""
