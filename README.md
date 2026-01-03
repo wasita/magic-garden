@@ -163,30 +163,37 @@ uv run python main.py --set-region
 
 ## Building Standalone Executable
 
-You can package the bot as a standalone executable:
+You can package the bot as a standalone `.exe` that users can run without installing Python.
 
-### Install PyInstaller
+### Prerequisites for Building
 
-```bash
-pip install pyinstaller
-```
+1. Install PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
+
+2. **Windows:** Ensure Tesseract is installed at `C:\Program Files\Tesseract-OCR`
+   - The build will automatically bundle Tesseract into the executable
 
 ### Build
 
 ```bash
-# Using the spec file (recommended)
 pyinstaller magic-garden.spec
-
-# Or simple one-liner
-pyinstaller --onefile --console main.py
 ```
 
-The executable will be in the `dist/` folder.
+The executable will be in the `dist/` folder as `MagicGardenBot.exe`.
+
+### What Gets Bundled
+
+- Python runtime
+- All dependencies (OpenCV, pytesseract, EasyOCR, PyTorch)
+- Tesseract OCR (Windows) - no separate install needed
+- Default config and templates
 
 **Notes:**
 - Executable size is large (~500MB+) due to EasyOCR/PyTorch
-- Windows users still need Tesseract OCR installed separately
 - First run may be slow as EasyOCR downloads language models
+- Users just double-click to run - no Python or Tesseract install required
 
 ## How It Works
 

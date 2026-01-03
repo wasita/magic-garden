@@ -4,16 +4,13 @@
 #
 # To build the executable:
 #   1. Install PyInstaller: pip install pyinstaller
-#   2. Run: pyinstaller magic-garden.spec
-#   3. Find executable in dist/ folder
-#
-# Notes:
-#   - The executable will be large (~500MB+) due to EasyOCR/PyTorch
-#   - Tesseract OCR must still be installed separately on the target machine
-#   - First run may be slow as EasyOCR downloads models
+#   2. Ensure Tesseract is installed at C:\Program Files\Tesseract-OCR (Windows)
+#   3. Run: pyinstaller magic-garden.spec
+#   4. Find executable in dist/ folder
 #
 
 import sys
+import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
@@ -26,18 +23,39 @@ hidden_imports = (
     collect_submodules('easyocr') +
     collect_submodules('torch') +
     collect_submodules('cv2') +
-    ['PIL', 'PIL.Image', 'numpy', 'pytesseract']
+    ['PIL', 'PIL.Image', 'numpy', 'pytesseract', 'pydirectinput']
 )
+
+# Platform-specific binaries
+binaries = []
+datas = [
+    ('config.json', '.'),
+    ('templates', 'templates'),
+    ('src', 'src'),
+] + easyocr_datas
+
+# Bundle Tesseract on Windows
+if sys.platform == 'win32':
+    tesseract_path = r'C:\Program Files\Tesseract-OCR'
+    if os.path.exists(tesseract_path):
+        # Add Tesseract executable and DLLs
+        for f in os.listdir(tesseract_path):
+            full_path = os.path.join(tesseract_path, f)
+            if os.path.isfile(full_path):
+                binaries.append((full_path, 'tesseract'))
+        # Add tessdata (language models)
+        tessdata_path = os.path.join(tesseract_path, 'tessdata')
+        if os.path.exists(tessdata_path):
+            datas.append((tessdata_path, 'tesseract/tessdata'))
+    else:
+        print(f"WARNING: Tesseract not found at {tesseract_path}")
+        print("The built executable will require Tesseract to be installed separately.")
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
-    datas=[
-        ('config.json', '.'),
-        ('templates', 'templates'),
-        ('src', 'src'),
-    ] + easyocr_datas,
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},

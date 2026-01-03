@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import pyautogui
 import pytesseract
+import sys
 import warnings
 from pathlib import Path
 from typing import Optional, Tuple, List
@@ -9,6 +10,20 @@ from PIL import Image
 
 # Suppress torch warnings
 warnings.filterwarnings("ignore", message=".*pin_memory.*")
+
+# Configure Tesseract path for bundled executable
+def _configure_tesseract():
+    """Set Tesseract path when running as PyInstaller bundle."""
+    import os
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        bundle_dir = Path(sys._MEIPASS)
+        tesseract_exe = bundle_dir / 'tesseract' / 'tesseract.exe'
+        if tesseract_exe.exists():
+            pytesseract.pytesseract.tesseract_cmd = str(tesseract_exe)
+            os.environ['TESSDATA_PREFIX'] = str(bundle_dir / 'tesseract' / 'tessdata')
+
+_configure_tesseract()
 
 # Lazy load easyocr (it's slow to import)
 _easyocr_reader = None
