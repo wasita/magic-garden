@@ -23,8 +23,12 @@ hidden_imports = (
     collect_submodules('easyocr') +
     collect_submodules('torch') +
     collect_submodules('cv2') +
-    ['PIL', 'PIL.Image', 'numpy', 'pytesseract', 'pydirectinput']
+    ['PIL', 'PIL.Image', 'numpy', 'pytesseract']
 )
+
+# pydirectinput is Windows-only
+if sys.platform == 'win32':
+    hidden_imports.append('pydirectinput')
 
 # Platform-specific binaries
 binaries = []
