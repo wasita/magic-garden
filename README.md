@@ -195,6 +195,24 @@ The executable will be in the `dist/` folder as `MagicGardenBot.exe`.
 - First run may be slow as EasyOCR downloads language models
 - Users just double-click to run - no Python or Tesseract install required
 
+### Creating a Release
+
+GitHub Actions automatically builds and publishes releases when you push a version tag:
+
+```bash
+# Tag your commit with a version
+git tag v1.0.0
+
+# Push the tag to trigger the build
+git push origin v1.0.0
+```
+
+This will:
+1. Build `MagicGardenBot.exe` with all dependencies bundled
+2. Create a GitHub Release with the executable attached
+
+Users can download the `.exe` directly from the [Releases](../../releases) page.
+
 ## How It Works
 
 1. **Shop Navigation** - Teleports to shop (Shift+1), opens seed/egg shop (Space)
