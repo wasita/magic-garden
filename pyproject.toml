@@ -18,5 +18,5 @@ dependencies = [
 [project.scripts]
 magic-garden = "main:main"
 
-[tool.uv]
-dev-dependencies = []
+[dependency-groups]
+dev = []
