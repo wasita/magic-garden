@@ -369,14 +369,30 @@ class AutoBuyer:
                 self._log("WARNING: No region set, cannot center mouse for scroll")
             # Check if we've reached the end of the shop (end marker visible)
             if self.screen.text_exists(screen, end_marker):
-                self._log(f"Found '{end_marker}' - doing one more scan to make sure we don't miss it")
-                # Do one more scan specifically for the end marker item in case it has stock
-                screen = self.screen.capture_screen(region)
-                shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
-                for target, rel_x, rel_y in shop_items:
-                    if end_marker.lower() in target.lower():
-                        self._log(f"Found {target} with stock! Buying before ending...")
+                self._log(f"Found '{end_marker}' - scrolling down to fully reveal it")
+
+                # Scroll down a few more times to ensure end marker item is fully visible
+                scroll_amount = -100 if IS_WINDOWS else -10
+                for _ in range(3):
+                    pyautogui.scroll(scroll_amount)
+                    time.sleep(0.1)
+
+                self._log("Doing final scan for end marker item...")
+                time.sleep(0.3)  # Let UI settle
+
+                # Keep scanning until no more items with stock on this final page
+                found_end_item = True
+                while found_end_item:
+                    found_end_item = False
+                    screen = self.screen.capture_screen(region)
+                    shop_items = self.screen.find_shop_items_with_stock(screen, targets, debug=True)
+
+                    for target, rel_x, rel_y in shop_items:
+                        self._log(f"Found {target} with stock on final page! Buying...")
                         self._buy_until_no_stock_ocr(target, region, item_pos=(rel_x, rel_y))
+                        found_end_item = True
+                        break  # Re-scan after buying
+
                 self._log(f"Reached end of shop")
                 break
 
