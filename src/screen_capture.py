@@ -550,6 +550,15 @@ class ScreenCapture:
 
         if debug:
             print(f"[DEBUG] Looking for close button, scale={scale:.2f}, area range={min_area}-{max_area}")
+            # Save debug images for close button detection
+            try:
+                debug_dir = Path(__file__).parent.parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                cv2.imwrite(str(debug_dir / "close_btn_mask.png"), mask)
+                cv2.imwrite(str(debug_dir / "close_btn_screen.png"), screen)
+                print(f"[DEBUG] Saved close button debug images to {debug_dir}")
+            except Exception as e:
+                print(f"[DEBUG] Failed to save close button debug images: {e}")
 
         candidates = []
         for contour in contours:

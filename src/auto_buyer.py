@@ -303,7 +303,7 @@ class AutoBuyer:
     def _buy_all_items_in_shop_with_scroll(self, region: Optional[Tuple[int, int, int, int]], shop_type: str):
         """Buy all available items in the shop, scrolling down to see all items."""
         click_delay = self.config.get("click_delay", 0.1)
-        max_scroll_pages = 100  # Safety limit, but we stop when we see end marker
+        max_scroll_pages = 40  # Safety limit - if we hit this, check for popups
 
         # End marker - last item in shop (stop scrolling when we see this)
         # Use just the unique word for fuzzy matching (case-insensitive)
@@ -318,7 +318,7 @@ class AutoBuyer:
             targets = [t for t in ocr_targets if "Egg" in t]
 
         self._log(f"Looking for {shop_type} items: {targets}")
-        self._log(f"Will scroll until '{end_marker}' is visible")
+        self._log(f"Will scroll until '{end_marker}' is visible (max {max_scroll_pages} pages)")
 
         # Scroll through the shop and buy items on each page
         for page in range(max_scroll_pages):
@@ -401,6 +401,36 @@ class AutoBuyer:
             pyautogui.scroll(scroll_amount)
             self._log("Scrolled down")
             time.sleep(0.08 if IS_WINDOWS else 0.15)
+        else:
+            # Hit max scroll pages without finding end marker - likely a popup blocking
+            self._log(f"WARNING: Reached {max_scroll_pages} pages without finding '{end_marker}'")
+            self._log("Checking for popup close buttons...")
+
+            # Keep dismissing popups until none are found
+            popups_dismissed = 0
+            while True:
+                screen = self.screen.capture_screen(region)
+                close_btn = self.screen.find_close_button(screen, debug=(popups_dismissed == 0))
+
+                if close_btn:
+                    rel_x, rel_y = close_btn
+                    if region:
+                        abs_x = rel_x + region[0]
+                        abs_y = rel_y + region[1]
+                    else:
+                        abs_x, abs_y = rel_x, rel_y
+
+                    self._log(f"Found popup close button at ({abs_x}, {abs_y}) - clicking to dismiss")
+                    pyautogui.click(abs_x, abs_y)
+                    popups_dismissed += 1
+                    time.sleep(0.25)
+                else:
+                    break
+
+            if popups_dismissed > 0:
+                self._log(f"Dismissed {popups_dismissed} popup(s) - restarting cycle")
+            else:
+                self._log("No close button found - may need to check region or game state")
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
         """Keep buying a specific item until NO STOCK appears (OCR version)."""
