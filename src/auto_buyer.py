@@ -406,9 +406,14 @@ class AutoBuyer:
             self._log(f"WARNING: Reached {max_scroll_pages} pages without finding '{end_marker}'")
             self._log("Checking for popup close buttons...")
 
-            # Keep dismissing popups until none are found
+            # Keep dismissing popups until none are found (max 10 attempts)
             popups_dismissed = 0
-            while True:
+            max_popup_attempts = 10
+
+            while popups_dismissed < max_popup_attempts:
+                if not self.running:
+                    return
+
                 screen = self.screen.capture_screen(region)
                 close_btn = self.screen.find_close_button(screen, debug=(popups_dismissed == 0))
 
@@ -420,8 +425,10 @@ class AutoBuyer:
                     else:
                         abs_x, abs_y = rel_x, rel_y
 
-                    self._log(f"Found popup close button at ({abs_x}, {abs_y}) - clicking to dismiss")
-                    pyautogui.click(abs_x, abs_y)
+                    self._log(f"Found popup close button at rel=({rel_x}, {rel_y}) abs=({abs_x}, {abs_y})")
+                    pyautogui.moveTo(abs_x, abs_y)
+                    time.sleep(0.1)
+                    pyautogui.click()
                     popups_dismissed += 1
                     time.sleep(0.25)
                 else:
@@ -548,11 +555,20 @@ class AutoBuyer:
 
         if green_buttons:
             self._log(f"Found {len(green_buttons)} green button(s): {green_buttons}")
-            if len(green_buttons) > 1:
-                self._log(f"Picking leftmost to avoid 'buy with donut'")
-                buy_rel_x, buy_rel_y = min(green_buttons, key=lambda b: b[0])
+
+            # Filter out buttons that are too far RIGHT of the item (likely donut button)
+            # The regular buy button should be roughly aligned with or left of the item
+            max_x_offset_right = 200  # pixels to the right of item center
+            valid_buttons = [(bx, by) for bx, by in green_buttons if bx - rel_x < max_x_offset_right]
+
+            if valid_buttons:
+                if len(valid_buttons) > 1:
+                    self._log(f"Picking leftmost of {len(valid_buttons)} valid buttons")
+                    buy_rel_x, buy_rel_y = min(valid_buttons, key=lambda b: b[0])
+                else:
+                    buy_rel_x, buy_rel_y = valid_buttons[0]
             else:
-                buy_rel_x, buy_rel_y = green_buttons[0]
+                self._log(f"All {len(green_buttons)} buttons rejected - too far right (donut buttons?)")
 
         # Fallback to template matching if color detection failed
         if buy_rel_x is None:
