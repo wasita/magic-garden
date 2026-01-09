@@ -528,7 +528,18 @@ class ScreenCapture:
         Returns:
             (center_x, center_y) of the close button, or None if not found
         """
-        # Convert to HSV for color detection
+        # Try template matching first (most reliable)
+        template_match = self.find_template(screen, "close_button", debug=debug)
+        if template_match:
+            x, y, conf = template_match
+            if debug:
+                print(f"[DEBUG] Found close button via template at ({x}, {y}) conf={conf:.2f}")
+            return (x, y)
+
+        if debug:
+            print("[DEBUG] Template match failed, trying color detection...")
+
+        # Fallback: color detection for white X
         hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
 
         # White/light gray X button (low saturation, high value)
@@ -560,6 +571,9 @@ class ScreenCapture:
             except Exception as e:
                 print(f"[DEBUG] Failed to save close button debug images: {e}")
 
+        # For annotated debug image
+        annotated = screen.copy() if debug else None
+
         candidates = []
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -573,13 +587,35 @@ class ScreenCapture:
                     center_y = y + h // 2
                     # Score: prefer top-right
                     score = center_x - center_y  # Higher x, lower y = higher score
-                    candidates.append((center_x, center_y, score))
+                    candidates.append((center_x, center_y, score, x, y, w, h))
                     if debug:
-                        print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area}")
+                        print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area} score={score}")
+                        # Draw candidate in yellow
+                        cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 255), 2)
+                        cv2.putText(annotated, f"score={score}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
 
+        result = None
         if candidates:
             # Return the most likely close button (top-right preference)
             candidates.sort(key=lambda c: c[2], reverse=True)
-            return (candidates[0][0], candidates[0][1])
+            winner = candidates[0]
+            result = (winner[0], winner[1])
 
-        return None
+            if debug:
+                # Draw winner in green with thicker border
+                x, y, w, h = winner[3], winner[4], winner[5], winner[6]
+                cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 0), 3)
+                cv2.circle(annotated, (winner[0], winner[1]), 8, (0, 0, 255), -1)
+                cv2.putText(annotated, "SELECTED", (x, y - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        # Save annotated image
+        if debug and annotated is not None:
+            try:
+                debug_dir = Path(__file__).parent.parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                cv2.imwrite(str(debug_dir / "close_btn_annotated.png"), annotated)
+                print(f"[DEBUG] Saved annotated close button image")
+            except Exception as e:
+                print(f"[DEBUG] Failed to save annotated image: {e}")
+
+        return result

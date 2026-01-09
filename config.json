@@ -19,7 +19,8 @@
         "buy_button": "templates/buy_button.png",
         "green_buy_button": "templates/green_buy_button.png",
         "open_seed_shop": "templates/open_seed_shop.png",
-        "open_egg_shop": "templates/open_egg_shop.png"
+        "open_egg_shop": "templates/open_egg_shop.png",
+        "close_button": "templates/close_button.png"
     },
     "hotkeys": {
         "toggle": "f6",

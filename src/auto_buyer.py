@@ -52,6 +52,28 @@ def _hotkey(*keys):
         pyautogui.hotkey(*keys)
 
 
+def _move_to(x: int, y: int):
+    """Move mouse to position using DirectInput on Windows."""
+    if IS_WINDOWS and HAS_DIRECTINPUT:
+        pydirectinput.moveTo(x, y)
+    else:
+        pyautogui.moveTo(x, y)
+
+
+def _click(x: int = None, y: int = None):
+    """Click at position (or current position if no coords) using DirectInput on Windows."""
+    if IS_WINDOWS and HAS_DIRECTINPUT:
+        if x is not None and y is not None:
+            pydirectinput.click(x, y)
+        else:
+            pydirectinput.click()
+    else:
+        if x is not None and y is not None:
+            pyautogui.click(x, y)
+        else:
+            pyautogui.click()
+
+
 class AutoBuyer:
     def __init__(self, config: Config):
         self.config = config
@@ -205,6 +227,44 @@ class AutoBuyer:
 
         return False
 
+    def _dismiss_all_popups(self, region: Optional[Tuple[int, int, int, int]]) -> int:
+        """Dismiss all popups by repeatedly checking for close buttons.
+
+        Returns:
+            Number of popups dismissed
+        """
+        popups_dismissed = 0
+        max_attempts = 10
+
+        while popups_dismissed < max_attempts:
+            if not self.running:
+                return popups_dismissed
+
+            screen = self.screen.capture_screen(region)
+            close_btn = self.screen.find_close_button(screen, debug=(popups_dismissed == 0))
+
+            if close_btn:
+                rel_x, rel_y = close_btn
+                if region:
+                    abs_x = rel_x + region[0]
+                    abs_y = rel_y + region[1]
+                else:
+                    abs_x, abs_y = rel_x, rel_y
+
+                self._log(f"Found popup X at rel=({rel_x}, {rel_y}) abs=({abs_x}, {abs_y}) - dismissing")
+                _move_to(abs_x, abs_y)
+                time.sleep(0.1)
+                _click()
+                popups_dismissed += 1
+                time.sleep(0.25)
+            else:
+                break
+
+        if popups_dismissed > 0:
+            self._log(f"Dismissed {popups_dismissed} popup(s)")
+
+        return popups_dismissed
+
     def _shop_cycle(self, region: Optional[Tuple[int, int, int, int]]):
         """Complete one shop cycle: open shop, buy seeds, buy eggs."""
         self._log("=== Starting new shop cycle ===")
@@ -224,10 +284,8 @@ class AutoBuyer:
             self._log(f"Clicked center ({center_x}, {center_y}) to focus game")
             time.sleep(0.5)
 
-        # TODO: Re-enable pop-up dismissal once we can distinguish from chat window
-        # while self._dismiss_popups(region):
-        #     self._log("Dismissed a pop-up, checking for more...")
-        #     time.sleep(0.3)
+        # Dismiss any popups before opening shop
+        self._dismiss_all_popups(region)
 
         # Step 1: Teleport to shop using Shift+1
         _hotkey('shift', '1')
@@ -405,38 +463,8 @@ class AutoBuyer:
             # Hit max scroll pages without finding end marker - likely a popup blocking
             self._log(f"WARNING: Reached {max_scroll_pages} pages without finding '{end_marker}'")
             self._log("Checking for popup close buttons...")
-
-            # Keep dismissing popups until none are found (max 10 attempts)
-            popups_dismissed = 0
-            max_popup_attempts = 10
-
-            while popups_dismissed < max_popup_attempts:
-                if not self.running:
-                    return
-
-                screen = self.screen.capture_screen(region)
-                close_btn = self.screen.find_close_button(screen, debug=(popups_dismissed == 0))
-
-                if close_btn:
-                    rel_x, rel_y = close_btn
-                    if region:
-                        abs_x = rel_x + region[0]
-                        abs_y = rel_y + region[1]
-                    else:
-                        abs_x, abs_y = rel_x, rel_y
-
-                    self._log(f"Found popup close button at rel=({rel_x}, {rel_y}) abs=({abs_x}, {abs_y})")
-                    pyautogui.moveTo(abs_x, abs_y)
-                    time.sleep(0.1)
-                    pyautogui.click()
-                    popups_dismissed += 1
-                    time.sleep(0.25)
-                else:
-                    break
-
-            if popups_dismissed > 0:
-                self._log(f"Dismissed {popups_dismissed} popup(s) - restarting cycle")
-            else:
+            popups_dismissed = self._dismiss_all_popups(region)
+            if popups_dismissed == 0:
                 self._log("No close button found - may need to check region or game state")
 
     def _buy_until_no_stock(self, target: str, region: Optional[Tuple[int, int, int, int]]):
