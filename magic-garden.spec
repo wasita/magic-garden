@@ -8,9 +8,9 @@
 #   3. Find executable in dist/ folder
 #
 # Notes:
-#   - The executable will be large (~500MB+) due to EasyOCR/PyTorch
-#   - Tesseract OCR must still be installed separately on the target machine
-#   - First run may be slow as EasyOCR downloads models
+#   - This builds a LIGHTWEIGHT version using only Pytesseract (not EasyOCR)
+#   - Tesseract OCR must be installed separately on the target machine
+#   - For EasyOCR support, users should run from source with: pip install easyocr
 #
 
 import sys
@@ -18,16 +18,22 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# Collect EasyOCR data files (models, etc.)
-easyocr_datas = collect_data_files('easyocr')
+# Lightweight build - exclude heavy ML dependencies
+# EasyOCR/PyTorch are optional and can be installed separately if needed
+hidden_imports = [
+    'PIL', 'PIL.Image', 'numpy', 'pytesseract',
+    'cv2', 'pynput', 'pynput.keyboard', 'pynput.mouse',
+]
 
-# Collect all submodules for packages that need them
-hidden_imports = (
-    collect_submodules('easyocr') +
-    collect_submodules('torch') +
-    collect_submodules('cv2') +
-    ['PIL', 'PIL.Image', 'numpy', 'pytesseract']
-)
+# Exclude heavy packages to keep build small
+excludes = [
+    'torch', 'torchvision', 'torchaudio',
+    'easyocr',
+    'tensorflow', 'keras',
+    'matplotlib', 'scipy', 'pandas',
+    'IPython', 'jupyter',
+    'playwright',  # DOM mode requires separate install
+]
 
 a = Analysis(
     ['main.py'],
@@ -37,12 +43,12 @@ a = Analysis(
         ('config.json', '.'),
         ('templates', 'templates'),
         ('src', 'src'),
-    ] + easyocr_datas,
+    ],
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
