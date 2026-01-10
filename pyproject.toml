@@ -2,7 +2,7 @@
 name = "magic-garden"
 version = "0.1.0"
 description = "Auto-buyer bot for Magic Garden mythical eggs and seeds"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "pyautogui>=0.9.54",
     "opencv-python>=4.8.0",
