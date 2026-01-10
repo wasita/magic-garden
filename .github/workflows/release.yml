@@ -3,7 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - "v*" # Triggers on version tags like v1.0.0
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   build-windows:
