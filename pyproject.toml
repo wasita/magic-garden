@@ -10,13 +10,16 @@ dependencies = [
     "pillow>=10.0.0",
     "pynput>=1.7.6",
     "pytesseract>=0.3.10",
+    "torch",
+    "torchvision",
     "easyocr>=1.7.0",
     "pydirectinput>=1.0.4; sys_platform == 'win32'",
     "pyinstaller>=6.17.0",
 ]
-
 [project.scripts]
 magic-garden = "main:main"
 
 [dependency-groups]
 dev = []
+[tool.uv]
+extra-index-url = ["https://download.pytorch.org/whl/cpu"]
