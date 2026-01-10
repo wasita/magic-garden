@@ -18,7 +18,7 @@ Automatically monitors and purchases seeds and eggs in the Magic Garden Discord 
 
 ### Prerequisites
 
-- [uv](https://docs.astral.sh/uv/) (recommended) or Python 3.10+
+- [uv](https://docs.astral.sh/uv/) (recommended) or Python 3.11+
 - Magic Garden game (Discord activity)
 - **Windows only:** Tesseract OCR (see below)
 - **Windows only:** pydirectinput (for game input - installed automatically)
