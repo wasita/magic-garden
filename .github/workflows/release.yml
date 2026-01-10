@@ -26,8 +26,11 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: |
-          uv sync
+        run: 
+          rm -f uv.lock
+          uv venv
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv sync --no-install-project
           uv add pyinstaller
 
       - name: Build executable
@@ -92,13 +95,16 @@ jobs:
 
       - name: Install Tesseract
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
-
+        
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
         run: |
-          uv sync
+          rm -f uv.lock
+          uv venv
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv sync --no-install-project
           uv add pyinstaller
 
       - name: Build executable
