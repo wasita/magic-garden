@@ -51,14 +51,20 @@ class ScreenCapture:
 
     def load_template(self, name: str, path: str) -> bool:
         """Load a template image for matching."""
-        template_path = Path(path)
+        # When running as PyInstaller bundle, resolve path relative to bundle dir
+        if getattr(sys, 'frozen', False):
+            bundle_dir = Path(sys._MEIPASS)
+            template_path = bundle_dir / path
+        else:
+            template_path = Path(path)
+
         if not template_path.exists():
-            print(f"Warning: Template not found: {path}")
+            print(f"Warning: Template not found: {template_path}")
             return False
 
         template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
         if template is None:
-            print(f"Warning: Could not load template: {path}")
+            print(f"Warning: Could not load template: {template_path}")
             return False
 
         self.templates[name] = template
