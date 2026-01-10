@@ -27,7 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: 
-          rm -f uv.lock
           uv venv
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           uv sync --no-install-project
@@ -101,7 +100,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          rm -f uv.lock
           uv venv
           uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           uv sync --no-install-project
