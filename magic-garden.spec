@@ -16,15 +16,23 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 block_cipher = None
 
 # Collect EasyOCR data files (models, etc.)
-easyocr_datas = collect_data_files('easyocr')
+# easyocr_datas = collect_data_files('easyocr')
+
 
 # Collect all submodules for packages that need them
-hidden_imports = (
-    collect_submodules('easyocr') +
-    collect_submodules('torch') +
-    collect_submodules('cv2') +
-    ['PIL', 'PIL.Image', 'numpy', 'pytesseract']
-)
+hidden_imports = [
+    'PIL', 'PIL.Image', 'numpy', 'pytesseract',
+    'cv2', 'pynput', 'pynput.keyboard', 'pynput.mouse',
+]
+
+excludes = [
+    'torch', 'torchvision', 'torchaudio',
+    'easyocr',
+    'tensorflow', 'keras',
+    'matplotlib', 'scipy', 'pandas',
+    'IPython', 'jupyter',
+    'playwright',
+]
 
 # pydirectinput is Windows-only
 if sys.platform == 'win32':
@@ -36,7 +44,7 @@ datas = [
     ('config.json', '.'),
     ('templates', 'templates'),
     ('src', 'src'),
-] + easyocr_datas
+]
 
 # Bundle Tesseract on Windows
 if sys.platform == 'win32':
@@ -64,21 +72,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        'torch.cuda',
-        'torch.distributed',
-        'torch.testing',
-        'torch.utils.tensorboard',
-        'torch.utils.bottleneck',
-        'torch.utils.mobile_optimizer',
-        'torch.onnx',
-        'torch.optim.lr_scheduler',
-        'torch.backends.cudnn',
-        'torch.backends.cuda',
-        'tensorboard',
-        'lightning',
-        'pytorch_lightning',
-    ],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
