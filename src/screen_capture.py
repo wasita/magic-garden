@@ -3,12 +3,27 @@ import numpy as np
 import pyautogui
 import pytesseract
 import warnings
+import sys
+import os
 from pathlib import Path
 from typing import Optional, Tuple, List
 from PIL import Image
 
 # Suppress torch warnings
 warnings.filterwarnings("ignore", message=".*pin_memory.*")
+
+
+def get_resource_path(relative_path: str) -> Path:
+    """Get absolute path to resource, works for dev and PyInstaller bundle."""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running in development
+        base_path = Path(__file__).parent.parent
+
+    return base_path / relative_path
+
 
 # Lazy load easyocr (it's slow to import)
 _easyocr_reader = None
@@ -36,14 +51,19 @@ class ScreenCapture:
 
     def load_template(self, name: str, path: str) -> bool:
         """Load a template image for matching."""
+        # Try the path as-is first, then try resolving for PyInstaller
         template_path = Path(path)
         if not template_path.exists():
-            print(f"Warning: Template not found: {path}")
+            # Try resolving relative to bundle/project root
+            template_path = get_resource_path(path)
+
+        if not template_path.exists():
+            print(f"Warning: Template not found: {path} (also tried {template_path})")
             return False
 
         template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
         if template is None:
-            print(f"Warning: Could not load template: {path}")
+            print(f"Warning: Could not load template: {template_path}")
             return False
 
         self.templates[name] = template
