@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description="Magic Garden Auto-Buyer Bot")
     parser.add_argument("--headless", action="store_true", help="Run without GUI")
     parser.add_argument("--capture", type=str, help="Capture a template screenshot",
-                        choices=["mythical_egg", "mythical_seed", "buy_button"])
+                        choices=["mythical_egg", "buy_button"])
     parser.add_argument("--capture-template", type=str, metavar="NAME",
                         help="Interactive template capture - click on item to capture (e.g., sunflower_seed)")
     parser.add_argument("--set-region", action="store_true",
@@ -136,7 +136,6 @@ def main():
         if not buyer.load_templates():
             print("Error: Could not load templates. Create them first with:")
             print("  python main.py --capture mythical_egg")
-            print("  python main.py --capture mythical_seed")
             print("  python main.py --capture buy_button")
             sys.exit(1)
 

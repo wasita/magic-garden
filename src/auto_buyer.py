@@ -778,10 +778,6 @@ class AutoBuyer:
             if egg_match:
                 self._handle_detection("mythical_egg", egg_match, region)
 
-            seed_match = self.screen.find_template(screen, "mythical_seed")
-            if seed_match:
-                self._handle_detection("mythical_seed", seed_match, region)
-
     def _handle_ocr_detection(self, item_type: str, position: Tuple[int, int], region: Optional[Tuple[int, int, int, int]]):
         """Handle item detected via OCR."""
         x, y = position

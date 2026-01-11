@@ -16,7 +16,6 @@ DEFAULT_CONFIG = {
     "monitor_region": MONITOR_REGIONS.get(platform.system()),
     "templates": {
         "mythical_egg": "templates/mythical_egg.png",
-        "mythical_seed": "templates/mythical_seed.png",
         "buy_button": "templates/buy_button.png"
     },
     "hotkeys": {
