@@ -2,8 +2,9 @@ import cv2
 import numpy as np
 import pyautogui
 import pytesseract
-import sys
 import warnings
+import sys
+import os
 from pathlib import Path
 from typing import Optional, Tuple, List
 from PIL import Image
@@ -11,19 +12,18 @@ from PIL import Image
 # Suppress torch warnings
 warnings.filterwarnings("ignore", message=".*pin_memory.*")
 
-# Configure Tesseract path for bundled executable
-def _configure_tesseract():
-    """Set Tesseract path when running as PyInstaller bundle."""
-    import os
+
+def get_resource_path(relative_path: str) -> Path:
+    """Get absolute path to resource, works for dev and PyInstaller bundle."""
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
-        bundle_dir = Path(sys._MEIPASS)
-        tesseract_exe = bundle_dir / 'tesseract' / 'tesseract.exe'
-        if tesseract_exe.exists():
-            pytesseract.pytesseract.tesseract_cmd = str(tesseract_exe)
-            os.environ['TESSDATA_PREFIX'] = str(bundle_dir / 'tesseract' / 'tessdata')
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Running in development
+        base_path = Path(__file__).parent.parent
 
-_configure_tesseract()
+    return base_path / relative_path
+
 
 # Lazy load easyocr (it's slow to import)
 _easyocr_reader = None
@@ -51,15 +51,14 @@ class ScreenCapture:
 
     def load_template(self, name: str, path: str) -> bool:
         """Load a template image for matching."""
-        # When running as PyInstaller bundle, resolve path relative to bundle dir
-        if getattr(sys, 'frozen', False):
-            bundle_dir = Path(sys._MEIPASS)
-            template_path = bundle_dir / path
-        else:
-            template_path = Path(path)
+        # Try the path as-is first, then try resolving for PyInstaller
+        template_path = Path(path)
+        if not template_path.exists():
+            # Try resolving relative to bundle/project root
+            template_path = get_resource_path(path)
 
         if not template_path.exists():
-            print(f"Warning: Template not found: {template_path}")
+            print(f"Warning: Template not found: {path} (also tried {template_path})")
             return False
 
         template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
@@ -448,19 +447,13 @@ class ScreenCapture:
         # Convert to HSV for better color detection
         hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
 
-        # Try multiple green ranges to catch different shades
-        # Range 1: Yellow-green to green (original range, widened)
-        lower_green1 = np.array([35, 50, 80])
-        upper_green1 = np.array([85, 255, 255])
+        # The buy button green (extracted from template: H=53, S=153, V=172)
+        # Use a range around these values
+        lower_green = np.array([43, 100, 120])  # Widened range for PC
+        upper_green = np.array([75, 255, 255])
 
-        # Range 2: Brighter/more saturated greens
-        lower_green2 = np.array([40, 100, 100])
-        upper_green2 = np.array([80, 255, 255])
-
-        # Create masks and combine them
-        mask1 = cv2.inRange(hsv, lower_green1, upper_green1)
-        mask2 = cv2.inRange(hsv, lower_green2, upper_green2)
-        mask = cv2.bitwise_or(mask1, mask2)
+        # Create mask for green pixels
+        mask = cv2.inRange(hsv, lower_green, upper_green)
 
         # Find contours (connected green regions)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -468,23 +461,11 @@ class ScreenCapture:
         # Scale area thresholds based on screen size (Mac baseline: 645x534)
         screen_h, screen_w = screen.shape[:2]
         scale = (screen_w * screen_h) / (645 * 534)
-        min_area = int(200 * scale)   # Lowered from 500
-        max_area = int(20000 * scale)  # Increased from 10000
+        min_area = int(500 * scale)
+        max_area = int(10000 * scale)
 
         if debug:
             print(f"[DEBUG] Screen {screen_w}x{screen_h}, scale={scale:.2f}, area range={min_area}-{max_area}")
-            # Save debug images to debug folder
-            try:
-                debug_dir = Path(__file__).parent.parent / "debug"
-                debug_dir.mkdir(exist_ok=True)
-                cv2.imwrite(str(debug_dir / "green_mask.png"), mask)
-                cv2.imwrite(str(debug_dir / "screenshot.png"), screen)
-                print(f"[DEBUG] Saved debug images to {debug_dir}")
-            except Exception as e:
-                print(f"[DEBUG] Failed to save debug images: {e}")
-
-        # For annotated debug image
-        annotated = screen.copy() if debug else None
 
         buttons = []
         for contour in contours:
@@ -492,40 +473,21 @@ class ScreenCapture:
             # Filter by size - scaled for screen resolution
             if area > min_area and area < max_area:
                 x, y, w, h = cv2.boundingRect(contour)
-                # Buy button must be WIDE rectangle (width > height * 1.8)
-                # This filters out square-ish seed icons (cactus, bamboo, etc.)
-                aspect_ratio = w / h if h > 0 else 0
-                min_width = int(25 * (screen_w / 645))  # Minimum width scaled (lowered)
-
-                if aspect_ratio > 1.3 and aspect_ratio < 8.0 and w > min_width:
+                # Buy button should be wider than tall (rectangular, not labels like "uncommon")
+                # Require width > height (true button shape)
+                if w > h * 1.2:
                     center_x = x + w // 2
                     center_y = y + h // 2
                     buttons.append((center_x, center_y, area))
                     if debug:
-                        print(f"[DEBUG] Green BUY BUTTON at ({center_x},{center_y}) size={w}x{h} area={area} ratio={aspect_ratio:.2f}")
-                        # Draw rectangle and center point on annotated image
-                        cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        cv2.circle(annotated, (center_x, center_y), 5, (0, 0, 255), -1)
-                        cv2.putText(annotated, f"BTN ({center_x},{center_y})", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                        print(f"[DEBUG] Green button at ({center_x},{center_y}) size={w}x{h} area={area} ratio={w/h:.2f}")
                 elif debug:
-                    print(f"[DEBUG] Rejected (seed icon?): size={w}x{h} ratio={aspect_ratio:.2f} (need ratio>1.8, w>{min_width})")
-            elif debug and area > 50:
+                    print(f"[DEBUG] Rejected shape: size={w}x{h} ratio={w/h:.2f} (need w > h*1.2)")
+            elif debug and area > 100:
                 print(f"[DEBUG] Rejected contour: area={area} (need {min_area}-{max_area})")
 
         # Sort by area (largest first) and return centers only
         buttons.sort(key=lambda b: b[2], reverse=True)
-
-        # Save annotated image showing detected buttons
-        if debug and annotated is not None:
-            try:
-                debug_dir = Path(__file__).parent.parent / "debug"
-                debug_dir.mkdir(exist_ok=True)
-                annotated_path = debug_dir / "buttons_annotated.png"
-                cv2.imwrite(str(annotated_path), annotated)
-                print(f"[DEBUG] Saved annotated image to {annotated_path}")
-            except Exception as e:
-                print(f"[DEBUG] Failed to save annotated image: {e}")
-
         return [(x, y) for x, y, _ in buttons]
 
     def find_close_button(self, screen: np.ndarray, debug: bool = False) -> Optional[Tuple[int, int]]:
@@ -534,18 +496,7 @@ class ScreenCapture:
         Returns:
             (center_x, center_y) of the close button, or None if not found
         """
-        # Try template matching first (most reliable)
-        template_match = self.find_template(screen, "close_button", debug=debug)
-        if template_match:
-            x, y, conf = template_match
-            if debug:
-                print(f"[DEBUG] Found close button via template at ({x}, {y}) conf={conf:.2f}")
-            return (x, y)
-
-        if debug:
-            print("[DEBUG] Template match failed, trying color detection...")
-
-        # Fallback: color detection for white X
+        # Convert to HSV for color detection
         hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
 
         # White/light gray X button (low saturation, high value)
@@ -567,18 +518,6 @@ class ScreenCapture:
 
         if debug:
             print(f"[DEBUG] Looking for close button, scale={scale:.2f}, area range={min_area}-{max_area}")
-            # Save debug images for close button detection
-            try:
-                debug_dir = Path(__file__).parent.parent / "debug"
-                debug_dir.mkdir(exist_ok=True)
-                cv2.imwrite(str(debug_dir / "close_btn_mask.png"), mask)
-                cv2.imwrite(str(debug_dir / "close_btn_screen.png"), screen)
-                print(f"[DEBUG] Saved close button debug images to {debug_dir}")
-            except Exception as e:
-                print(f"[DEBUG] Failed to save close button debug images: {e}")
-
-        # For annotated debug image
-        annotated = screen.copy() if debug else None
 
         candidates = []
         for contour in contours:
@@ -593,35 +532,13 @@ class ScreenCapture:
                     center_y = y + h // 2
                     # Score: prefer top-right
                     score = center_x - center_y  # Higher x, lower y = higher score
-                    candidates.append((center_x, center_y, score, x, y, w, h))
+                    candidates.append((center_x, center_y, score))
                     if debug:
-                        print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area} score={score}")
-                        # Draw candidate in yellow
-                        cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                        cv2.putText(annotated, f"score={score}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+                        print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area}")
 
-        result = None
         if candidates:
             # Return the most likely close button (top-right preference)
             candidates.sort(key=lambda c: c[2], reverse=True)
-            winner = candidates[0]
-            result = (winner[0], winner[1])
+            return (candidates[0][0], candidates[0][1])
 
-            if debug:
-                # Draw winner in green with thicker border
-                x, y, w, h = winner[3], winner[4], winner[5], winner[6]
-                cv2.rectangle(annotated, (x, y), (x + w, y + h), (0, 255, 0), 3)
-                cv2.circle(annotated, (winner[0], winner[1]), 8, (0, 0, 255), -1)
-                cv2.putText(annotated, "SELECTED", (x, y - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-        # Save annotated image
-        if debug and annotated is not None:
-            try:
-                debug_dir = Path(__file__).parent.parent / "debug"
-                debug_dir.mkdir(exist_ok=True)
-                cv2.imwrite(str(debug_dir / "close_btn_annotated.png"), annotated)
-                print(f"[DEBUG] Saved annotated close button image")
-            except Exception as e:
-                print(f"[DEBUG] Failed to save annotated image: {e}")
-
-        return result
+        return None
