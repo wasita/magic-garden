@@ -496,48 +496,75 @@ class ScreenCapture:
         Returns:
             (center_x, center_y) of the close button, or None if not found
         """
-        # Convert to HSV for color detection
+        debug_dir = Path("debug")
+        debug_dir.mkdir(exist_ok=True)
+
+        # Save screenshot for debugging
+        if debug:
+            cv2.imwrite(str(debug_dir / "close_btn_screen.png"), screen)
+
+        # Try template matching first (most reliable)
+        template_result = self.find_template(screen, "close_button")
+        if template_result:
+            x, y, conf = template_result
+            if debug:
+                print(f"[DEBUG] Found close button via template at ({x}, {y}) conf={conf:.2f}")
+                # Save annotated image
+                annotated = screen.copy()
+                cv2.circle(annotated, (x, y), 15, (0, 255, 0), 3)
+                cv2.putText(annotated, f"TEMPLATE ({x},{y})", (x-50, y-20),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.imwrite(str(debug_dir / "close_btn_annotated.png"), annotated)
+            return (x, y)
+
+        # Fallback: HSV color detection for white X button
         hsv = cv2.cvtColor(screen, cv2.COLOR_BGR2HSV)
 
         # White/light gray X button (low saturation, high value)
         lower_white = np.array([0, 0, 200])
         upper_white = np.array([180, 30, 255])
 
-        # Create mask for white pixels
         mask = cv2.inRange(hsv, lower_white, upper_white)
 
-        # Find contours
+        if debug:
+            cv2.imwrite(str(debug_dir / "close_btn_mask.png"), mask)
+
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Scale area thresholds based on screen size (Mac baseline: 645x534)
         screen_h, screen_w = screen.shape[:2]
         scale = (screen_w * screen_h) / (645 * 534)
-        # X button is typically small and square-ish
         min_area = int(100 * scale)
         max_area = int(2000 * scale)
 
         if debug:
-            print(f"[DEBUG] Looking for close button, scale={scale:.2f}, area range={min_area}-{max_area}")
+            print(f"[DEBUG] Looking for close button via color, scale={scale:.2f}, area range={min_area}-{max_area}")
 
         candidates = []
         for contour in contours:
             area = cv2.contourArea(contour)
             if area > min_area and area < max_area:
                 x, y, w, h = cv2.boundingRect(contour)
-                # X button should be roughly square
                 aspect_ratio = w / h if h > 0 else 0
                 if 0.5 < aspect_ratio < 2.0:
-                    # Prefer buttons in top-right area of screen (common for close buttons)
                     center_x = x + w // 2
                     center_y = y + h // 2
                     # Score: prefer top-right
-                    score = center_x - center_y  # Higher x, lower y = higher score
-                    candidates.append((center_x, center_y, score))
+                    score = center_x - center_y
+                    candidates.append((center_x, center_y, score, w, h, area))
                     if debug:
                         print(f"[DEBUG] Close button candidate at ({center_x},{center_y}) size={w}x{h} area={area}")
 
+        if debug:
+            # Save annotated image showing all candidates
+            annotated = screen.copy()
+            for i, (cx, cy, score, w, h, area) in enumerate(candidates):
+                color = (0, 255, 0) if i == 0 else (0, 255, 255)  # Green for best, yellow for others
+                cv2.circle(annotated, (cx, cy), 10, color, 2)
+                cv2.putText(annotated, f"#{i+1}", (cx+12, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+            cv2.imwrite(str(debug_dir / "close_btn_annotated.png"), annotated)
+
         if candidates:
-            # Return the most likely close button (top-right preference)
             candidates.sort(key=lambda c: c[2], reverse=True)
             return (candidates[0][0], candidates[0][1])
 

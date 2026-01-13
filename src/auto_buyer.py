@@ -53,11 +53,9 @@ def _hotkey(*keys):
 
 
 def _move_to(x: int, y: int):
-    """Move mouse to position using DirectInput on Windows."""
-    if IS_WINDOWS and HAS_DIRECTINPUT:
-        pydirectinput.moveTo(x, y)
-    else:
-        pyautogui.moveTo(x, y)
+    """Move mouse to position. Use pyautogui (works better for mouse movement)."""
+    # Always use pyautogui for mouse movement - pydirectinput has coordinate issues
+    pyautogui.moveTo(x, y)
 
 
 def _click(x: int = None, y: int = None):
@@ -253,10 +251,12 @@ class AutoBuyer:
 
                 self._log(f"Found popup X at rel=({rel_x}, {rel_y}) abs=({abs_x}, {abs_y}) - dismissing")
                 _move_to(abs_x, abs_y)
+                time.sleep(0.15)
+                _click(abs_x, abs_y)  # Pass coords directly for reliability
                 time.sleep(0.1)
-                _click()
+                _click(abs_x, abs_y)  # Double-click in case first didn't register
                 popups_dismissed += 1
-                time.sleep(0.25)
+                time.sleep(0.3)
             else:
                 break
 

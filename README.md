@@ -5,13 +5,14 @@ Automatically monitors and purchases seeds and eggs in the Magic Garden Discord 
 ## Features
 
 - **OCR-based detection** - Finds items by reading text (no fragile image templates)
-- **Smart shop navigation** - Teleports to shop, scrolls through all pages, loops continuously
+- **Smart shop navigation** - Teleports to shop, scrolls through all pages (up to 40), loops continuously
 - **Green button detection** - Uses color detection to find buy buttons reliably
 - **Fuzzy text matching** - Handles OCR errors like "arrot" → "Carrot"
 - **Stock verification** - Only clicks items that show "STOCK" (ignores popups)
+- **Popup dismissal** - Automatically closes game popups that block the shop
 - **Configurable targets** - Choose which seeds/eggs to buy
 - **Shop mode selection** - Scan seed shop, egg shop, or both
-- **Cross-platform** - Works on macOS and Windows
+- **Cross-platform** - Works on macOS, Windows, and Linux
 - **GUI and headless modes** - Run with interface or AFK in terminal
 
 ## Setup
@@ -22,6 +23,7 @@ Automatically monitors and purchases seeds and eggs in the Magic Garden Discord 
 - Magic Garden game (Discord activity)
 - **Windows only:** Tesseract OCR (see below)
 - **Windows only:** pydirectinput (for game input - installed automatically)
+- **Linux only:** Tesseract OCR (`sudo apt install tesseract-ocr`)
 
 ### macOS Installation
 
@@ -78,6 +80,21 @@ python -m venv .venv
 pip install -r requirements-windows.txt
 ```
 
+### Linux Installation
+
+```bash
+# Install Tesseract OCR
+sudo apt install tesseract-ocr
+
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone <your-repo-url>
+cd magic-garden
+uv sync
+```
+
 ## Configuration
 
 Before running, set up your game region and preferences in `config.json`:
@@ -125,6 +142,16 @@ Edit `config.json`:
 | `ocr_targets` | List of item names to buy | - |
 | `use_ocr` | Use OCR text detection (recommended) | true |
 | `startup_delay` | Seconds to wait before starting (focus game) | 3 |
+| `max_buy_attempts` | Max clicks on buy button before giving up | 20 |
+
+### Templates
+
+The bot uses template images in the `templates/` folder for UI element detection:
+- `close_button.png` - X button for dismissing popups (required for popup handling)
+- `green_buy_button.png` - Buy button (optional, color detection is primary)
+- Various seed/egg templates (legacy, OCR is now preferred)
+
+If `templates/close_button.png` is missing, the bot falls back to HSV color detection for white X buttons.
 
 ## Usage
 
@@ -187,7 +214,8 @@ The executable will be in the `dist/` folder as `MagicGardenBot.exe`.
 
 - Python runtime
 - All dependencies (OpenCV, pytesseract, EasyOCR, PyTorch)
-- Tesseract OCR (Windows) - no separate install needed
+- Tesseract OCR - bundled on all platforms (no separate install needed)
+- pydirectinput (Windows only - for game input compatibility)
 - Default config and templates
 
 **Notes:**
@@ -197,7 +225,7 @@ The executable will be in the `dist/` folder as `MagicGardenBot.exe`.
 
 ### Creating a Release
 
-GitHub Actions automatically builds and publishes releases when you push a version tag:
+GitHub Actions automatically builds and publishes multi-platform releases when you push a version tag:
 
 ```bash
 # Tag your commit with a version
@@ -208,23 +236,29 @@ git push origin v1.0.0
 ```
 
 This will:
-1. Build `MagicGardenBot.exe` with all dependencies bundled
-2. Create a GitHub Release with the executable attached
+1. Build executables for Windows, macOS, and Linux in parallel
+2. Bundle Tesseract OCR on each platform (no separate install needed)
+3. Create a GitHub Release with all executables attached
 
-Users can download the `.exe` directly from the [Releases](../../releases) page.
+Users can download directly from the [Releases](../../releases) page:
+- `MagicGardenBot.exe` - Windows
+- `MagicGardenBot-macos` - macOS
+- `MagicGardenBot-linux` - Linux
 
 ## How It Works
 
 1. **Shop Navigation** - Teleports to shop (Shift+1), opens seed/egg shop (Space)
-2. **Screen Capture** - Captures the game region defined in config
-3. **OCR Detection** - Uses pytesseract to read text on screen
-4. **Stock Filter** - Only considers items with "STOCK" text on the same line
-5. **Fuzzy Matching** - Matches partial text to handle OCR errors (e.g., "amboo" → "Bamboo")
-6. **Click Item** - Clicks on the item to open the buy accordion
-7. **Green Button Detection** - Finds buy buttons using HSV color matching
-8. **Buy Loop** - Clicks buy button repeatedly until it turns grey (sold out)
-9. **Re-scan Page** - After buying, re-scans the page for remaining items (handles layout shifts)
-10. **Scroll & Repeat** - Scrolls down, continues scanning until end of shop, then loops
+2. **Popup Dismissal** - Detects and closes any popups blocking the shop (template + color detection)
+3. **Screen Capture** - Captures the game region defined in config
+4. **OCR Detection** - Uses pytesseract to read text on screen
+5. **Stock Filter** - Only considers items with "STOCK" text on the same line
+6. **Fuzzy Matching** - Matches partial text to handle OCR errors (e.g., "amboo" → "Bamboo")
+7. **Click Item** - Clicks on the item to open the buy accordion
+8. **Green Button Detection** - Finds buy buttons using HSV color matching (filters out premium currency buttons)
+9. **Buy Loop** - Clicks buy button repeatedly until it turns grey (sold out)
+10. **Re-scan Page** - After buying, re-scans the page for remaining items (handles layout shifts)
+11. **Scroll & Repeat** - Scrolls down (max 40 pages), continues until end of shop, then loops
+12. **End Detection** - Detects Moonbinder Pod as last item, scrolls extra to ensure full visibility
 
 ## Debugging
 
@@ -232,8 +266,10 @@ When debug mode is enabled, the bot saves diagnostic images to the `debug/` fold
 - `debug/screenshot.png` - Current screen capture
 - `debug/green_mask.png` - HSV color mask showing detected green regions
 - `debug/buttons_annotated.png` - Screenshot with detected buttons highlighted
+- `debug/close_btn_annotated.png` - Close button detection with candidates marked
+- `debug/close_btn_mask.png` - HSV mask for white close button detection
 
-These help diagnose issues with button detection or region setup.
+These help diagnose issues with button detection, popup dismissal, or region setup.
 
 ## Troubleshooting
 
@@ -263,6 +299,16 @@ These help diagnose issues with button detection or region setup.
 - Check `debug/buttons_annotated.png` to see if button is detected
 - Increase `click_delay` in config.json if clicks are too fast
 - Ensure the game window is focused and not obstructed
+
+**Popups not being dismissed:**
+- Check `debug/close_btn_annotated.png` to see detected close button candidates
+- Ensure `templates/close_button.png` exists (for template matching)
+- Check that the popup X button is within the monitor region
+- The bot tries up to 10 popup dismissals per cycle
+
+**Bot clicking premium (donut) buttons:**
+- The bot filters out buttons >200px to the right of the item
+- Ensure your monitor region is set correctly with `--set-region`
 
 ## Disclaimer
 
